@@ -1,17 +1,37 @@
 import streamlit as st
-from streamlit_app.utils.api_client import get, post
+import html
+from streamlit_app.utils.api_client import get, post, health_check
 from streamlit_app.components.icon import icon, icon_title, icon_caption
 from streamlit_app.components.metric_card import metric_row
 from streamlit_app.components.card import card, card_header
 import time
 
+# ── Backend connectivity check ─────────────────────────────
+_backend_ok = health_check()
+
 # ── Hero Header ────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
-    <h1><i class="fa-solid fa-book-open" style="color:#2dd4bf;"></i> 经典论文精读助手</h1>
+    <h1><i class="fa-solid fa-book-open" style="color:#2dd4bf;"></i> 核动力科研牛马</h1>
     <p>从 Papers We Love 社区中发掘经典计算机科学论文，AI 辅助阅读，一键写入 Obsidian</p>
 </div>
 """, unsafe_allow_html=True)
+
+if not _backend_ok:
+    st.error("""
+    ⚠️ **后端服务未启动**
+
+    请先运行后端子服务，再刷新页面：
+
+    1. 打开新终端
+    2. 运行：`python start_app.py`
+
+    或手动启动后端：
+    ```
+    uvicorn app.main:app --host 127.0.0.1 --port 8000
+    ```
+    """)
+    st.stop()
 
 # ── Metrics ────────────────────────────────────────────────
 try:
@@ -124,10 +144,10 @@ if topics:
                     content=f"""
                     <div style="text-align:center;">
                         <div class="topic-icon-duotone" style="font-size:2rem; margin-bottom:0.5rem;">
-                            <i class="fa-solid fa-{fa_icon}"></i>
+                            <i class="fa-solid fa-{html.escape(fa_icon)}"></i>
                         </div>
-                        <div style="font-weight:600; color:var(--color-text-primary); font-size:1rem;">{topic.get('name_cn', topic.get('name', ''))}</div>
-                        <div style="color:var(--color-primary); font-weight:600; font-size:0.85rem;">{topic.get('paper_count', 0)} 篇论文</div>
+                        <div style="font-weight:600; color:var(--color-text-primary); font-size:1rem;">{html.escape(topic.get('name_cn', topic.get('name', '')))}</div>
+                        <div style="color:var(--color-primary); font-weight:600; font-size:0.85rem;">{html.escape(str(topic.get('paper_count', 0)))} 篇论文</div>
                     </div>
                     """,
                     variant="gradient",
@@ -151,7 +171,7 @@ if topics:
                 for i, topic in enumerate(row):
                     with ecols[i]:
                         fa_icon_empty = topic.get('fa_icon', 'file-lines')
-                        st.markdown(f"<div style='text-align:center;padding:0.5rem;opacity:0.6;'><div class='topic-icon-duotone' style='font-size:1.5rem;'><i class='fa-solid fa-{fa_icon_empty}'></i></div><div style='font-size:0.85rem;'>{topic.get('name_cn', topic.get('name', ''))}</div><div style='font-size:0.75rem;color:var(--color-text-secondary);'>暂无论文</div></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align:center;padding:0.5rem;opacity:0.6;'><div class='topic-icon-duotone' style='font-size:1.5rem;'><i class='fa-solid fa-{html.escape(fa_icon_empty)}'></i></div><div style='font-size:0.85rem;'>{html.escape(topic.get('name_cn', topic.get('name', '')))}</div><div style='font-size:0.75rem;color:var(--color-text-secondary);'>暂无论文</div></div>", unsafe_allow_html=True)
             if st.button("🔄 强制重新同步所有主题", key="force_resync_btn", use_container_width=True):
                 st.session_state["_force_sync"] = True
                 st.rerun()

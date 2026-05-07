@@ -15,10 +15,31 @@ def _get_client() -> OpenAI:
     )
 
 
-def _call_llm(messages: list[dict], max_tokens: int = None) -> tuple:
+def _build_reasoning_kwargs(settings) -> dict:
+    effort = settings.llm_reasoning_effort
+    if effort == "disabled":
+        return {"extra_body": {"thinking": {"type": "disabled"}}}
+    return {
+        "reasoning_effort": effort,
+        "extra_body": {"thinking": {"type": "enabled"}},
+    }
+
+
+def _call_llm(messages: list[dict], max_tokens: int = None, reasoning_effort: str = None) -> tuple:
     settings = get_settings()
     client = _get_client()
     max_retries = 2
+
+    reasoning_kwargs = _build_reasoning_kwargs(settings)
+    if reasoning_effort is not None:
+        if reasoning_effort == "disabled":
+            reasoning_kwargs = {"extra_body": {"thinking": {"type": "disabled"}}}
+        else:
+            reasoning_kwargs = {
+                "reasoning_effort": reasoning_effort,
+                "extra_body": {"thinking": {"type": "enabled"}},
+            }
+
     for attempt in range(max_retries + 1):
         try:
             response = client.chat.completions.create(
@@ -26,9 +47,11 @@ def _call_llm(messages: list[dict], max_tokens: int = None) -> tuple:
                 messages=messages,
                 max_tokens=max_tokens or settings.llm_max_tokens,
                 temperature=settings.llm_temperature,
+                **reasoning_kwargs,
             )
             content = response.choices[0].message.content
             finish_reason = response.choices[0].finish_reason
+            reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None) or ""
 
             if not content or not content.strip():
                 if attempt < max_retries:
@@ -42,6 +65,7 @@ def _call_llm(messages: list[dict], max_tokens: int = None) -> tuple:
                 "total_tokens": response.usage.prompt_tokens + response.usage.completion_tokens,
                 "model": settings.llm_model,
                 "finish_reason": finish_reason,
+                "reasoning_content": reasoning_content,
             }
         except Exception as e:
             if attempt < max_retries:
@@ -227,3 +251,121 @@ def parse_llm_json_response(content: str, context_hint: str = "") -> dict:
         f"上下文: {context_hint}\n"
         f"原始内容前300字: {content[:300]}"
     )
+
+
+def _get_model_config(provider=None, model_name=None):
+    import os
+    settings = get_settings()
+    if not provider and not model_name:
+        return settings.llm_api_base, settings.llm_api_key
+    provider_presets = {
+        "OpenAI": "https://api.openai.com/v1",
+        "Google": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "Anthropic": "https://api.anthropic.com/v1",
+        "xAI": "https://api.x.ai/v1",
+        "DeepSeek": "https://api.deepseek.com/v1",
+        "MiniMax Global": "https://api.minimaxi.com/v1",
+        "Z.ai": "https://api.z.ai/v1",
+        "Z.ai Plan": "https://api.z.ai/v1",
+        "OpenRouter": "https://openrouter.ai/api/v1",
+        "Kimi Global": "https://api.moonshot.cn/v1",
+    }
+    api_base = settings.llm_api_base
+    api_key = settings.llm_api_key
+    if provider and provider in provider_presets:
+        api_base = provider_presets[provider]
+        env_key = f"{provider.upper().replace(' ', '_').replace('.', '_')}_API_KEY"
+        provider_key = os.getenv(env_key, "")
+        if provider_key:
+            api_key = provider_key
+    return api_base, api_key
+
+
+def _call_llm_stream(messages, model_name=None, api_base=None, api_key=None, max_tokens=None):
+    settings = get_settings()
+    base_url = api_base or settings.llm_api_base
+    key = api_key or settings.llm_api_key
+    model = model_name or settings.llm_model
+    client = OpenAI(base_url=base_url, api_key=key, timeout=settings.llm_timeout)
+    reasoning_kwargs = _build_reasoning_kwargs(settings)
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        max_tokens=max_tokens or settings.llm_max_tokens,
+        temperature=settings.llm_temperature,
+        stream=True,
+        **reasoning_kwargs,
+    )
+    collected_content = []
+    collected_reasoning = []
+    usage_info = None
+    for chunk in response:
+        if chunk.choices:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                collected_content.append(delta.content)
+                yield delta.content
+            rc = getattr(delta, 'reasoning_content', None)
+            if rc:
+                collected_reasoning.append(rc)
+        if hasattr(chunk, 'usage') and chunk.usage:
+            usage_info = {
+                "prompt_tokens": chunk.usage.prompt_tokens or 0,
+                "completion_tokens": chunk.usage.completion_tokens or 0,
+                "total_tokens": (chunk.usage.prompt_tokens or 0) + (chunk.usage.completion_tokens or 0),
+                "model": model,
+            }
+    if not usage_info:
+        full_text = "".join(collected_content)
+        est_prompt = sum(len(m.get("content", "")) // 4 for m in messages)
+        est_completion = len(full_text) // 4
+        usage_info = {
+            "prompt_tokens": est_prompt,
+            "completion_tokens": est_completion,
+            "total_tokens": est_prompt + est_completion,
+            "model": model,
+        }
+    usage_info["reasoning_content"] = "".join(collected_reasoning)
+    yield ("__usage__", usage_info)
+
+
+def _call_llm_with_tools(messages, tools, model_name=None, api_base=None, api_key=None, max_tokens=None):
+    settings = get_settings()
+    base_url = api_base or settings.llm_api_base
+    key = api_key or settings.llm_api_key
+    model = model_name or settings.llm_model
+    client = OpenAI(base_url=base_url, api_key=key, timeout=settings.llm_timeout)
+    reasoning_kwargs = _build_reasoning_kwargs(settings)
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=tools,
+        max_tokens=max_tokens or settings.llm_max_tokens,
+        temperature=settings.llm_temperature,
+        **reasoning_kwargs,
+    )
+    choice = response.choices[0]
+    reasoning_content = getattr(choice.message, 'reasoning_content', None) or ""
+    result = {
+        "content": choice.message.content or "",
+        "reasoning_content": reasoning_content,
+        "tool_calls": [],
+        "finish_reason": choice.finish_reason,
+    }
+    if choice.message.tool_calls:
+        for tc in choice.message.tool_calls:
+            result["tool_calls"].append({
+                "id": tc.id,
+                "type": tc.type,
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            })
+    usage = {
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+        "total_tokens": response.usage.prompt_tokens + response.usage.completion_tokens,
+        "model": model,
+    }
+    return result, usage

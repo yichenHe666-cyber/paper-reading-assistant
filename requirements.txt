@@ -13,5 +13,9 @@ mcp==1.0.0
 markdown-it-py==3.0.0
 plotly==6.1.0
 pytest==8.4.0
+gpt-researcher>=0.8.0
+ddgs>=6.0.0
 # Optional: PDF text extraction (requires C++ build tools)
 # pymupdf==1.24.0
+ebooklib
+python-docx

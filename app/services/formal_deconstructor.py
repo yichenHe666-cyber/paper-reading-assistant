@@ -1,6 +1,8 @@
 import json
 from app.services.llm_service_base import BaseLLMService
 from app.services.llm_prompt_builder import PromptBuilder
+from app.services.memory_engine import memory_engine
+from app.database.session import SessionLocal
 from app.services.llm_utils import _call_llm, parse_llm_json_response
 
 
@@ -42,6 +44,15 @@ class FormalDeconstructorService(BaseLLMService):
             task_description="专精于数学证明的形式化分析与算法复杂度推导",
         )
         builder.add_context("论文片段", chunk[:MAX_CHUNK_CHARS])
+
+        db = SessionLocal()
+        try:
+            memory_segment = memory_engine.recall_for_context(db, paper_id=None, call_type="formal_deconstruct")
+            if memory_segment:
+                builder.inject_memory(memory_segment)
+        finally:
+            db.close()
+
         builder.set_output_format({
             "symbol_table": [
                 {"symbol": "符号（如 X, θ, P(·)）", "meaning": "原文中的定义", "location": "首次出现位置（如 §3.1 段落2）", "type": "scalar/vector/matrix/set/function/distribution/operator"}

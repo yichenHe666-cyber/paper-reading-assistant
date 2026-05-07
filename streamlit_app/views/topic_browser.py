@@ -1,4 +1,5 @@
 import streamlit as st
+import html
 from streamlit_app.utils.api_client import get, patch
 from streamlit_app.components.icon import icon
 from streamlit_app.components.card import card
@@ -45,6 +46,7 @@ else:
     with col1:
         selected_label = st.selectbox("选择主题", topic_options, key="topic_select")
     with col2:
+        st.markdown("<div style='height:1.75rem;'></div>", unsafe_allow_html=True)
         if st.button("🔄 刷新", use_container_width=True):
             st.rerun()
 
@@ -61,10 +63,10 @@ else:
                         content=f"""
                         <div style="text-align:center;">
                             <div class="topic-icon-duotone" style="font-size:2.5rem; margin-bottom:0.5rem;">
-                                <i class="fa-solid fa-{fa_icon}"></i>
+                                <i class="fa-solid fa-{html.escape(fa_icon)}"></i>
                             </div>
-                            <div style="font-weight:600; color:var(--color-text-primary); font-size:1rem;">{topic.get('name_cn', topic.get('name', ''))}</div>
-                            <div style="color:var(--color-primary); font-weight:600; font-size:0.85rem;">{topic.get('paper_count', 0)} 篇论文</div>
+                            <div style="font-weight:600; color:var(--color-text-primary); font-size:1rem;">{html.escape(topic.get('name_cn', topic.get('name', '')))}</div>
+                            <div style="color:var(--color-primary); font-weight:600; font-size:0.85rem;">{html.escape(str(topic.get('paper_count', 0)))} 篇论文</div>
                         </div>
                         """,
                         variant="default",
@@ -90,7 +92,7 @@ else:
             else:
                 papers = topic_data.get("papers", [])
                 fa_icon_topic = topic_data.get('fa_icon', 'file-lines')
-                st.subheader(f"<i class=\"fa-solid fa-{fa_icon_topic}\"></i> {topic_data.get('name_cn', topic_data.get('name', ''))} — {len(papers)} 篇", unsafe_allow_html=True)
+                st.markdown(f"<h3><i class=\"fa-solid fa-{html.escape(fa_icon_topic)}\"></i> {html.escape(topic_data.get('name_cn', topic_data.get('name', '')))} — {len(papers)} 篇</h3>", unsafe_allow_html=True)
 
                 status_filter = st.multiselect("状态筛选", ["未读", "精读中", "已读", "重读"], default=[], key="status_filter")
                 if status_filter:
@@ -129,15 +131,15 @@ else:
                             content=f"""
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
                                 <div style="flex:1; min-width:200px;">
-                                    <div style="font-size:1.15rem; font-weight:600; color:var(--color-text-primary); margin-bottom:0.4rem;">{paper.get('title', 'Untitled')}</div>
+                                    <div style="font-size:1.15rem; font-weight:600; color:var(--color-text-primary); margin-bottom:0.4rem;">{html.escape(paper.get('title', 'Untitled'))}</div>
                                     <div style="font-size:0.85rem; color:var(--color-text-secondary); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                                        <span>{icon('user', size='xs')} {authors_display}</span>
+                                        <span>{icon('user', size='xs')} {html.escape(authors_display)}</span>
                                         <span>|</span>
-                                        <span>{icon('calendar', size='xs')} {paper.get('year', 'N/A')}</span>
+                                        <span>{icon('calendar', size='xs')} {html.escape(str(paper.get('year', 'N/A')))}</span>
                                         <span>|</span>
-                                        <span class="{diff_class}">{icon('signal', size='xs')} {diff}</span>
+                                        <span class="{diff_class}">{icon('signal', size='xs')} {html.escape(diff)}</span>
                                         <span>|</span>
-                                        <span class="ui-badge ui-badge-{status_cfg[1]}">{status_cfg[0]}</span>
+                                        <span class="ui-badge ui-badge-{status_cfg[1]}">{html.escape(status_cfg[0])}</span>
                                         {synced_badge}
                                     </div>
                                 </div>
@@ -166,7 +168,7 @@ else:
                         with col4:
                             if paper.get("pdf_url"):
                                 st.markdown(f"""
-                                <a href="{paper['pdf_url']}" target="_blank" style="text-decoration:none;">
+                                <a href="{html.escape(paper['pdf_url'], quote=True)}" target="_blank" style="text-decoration:none;">
                                     <button style="width:100%;padding:0.4rem 0.8rem;border-radius:10px;border:1.5px solid var(--color-primary);background:transparent;cursor:pointer;color:var(--color-primary);font-weight:600;transition:all 0.2s;">
                                         {icon('file_pdf', size='sm')} PDF
                                     </button>

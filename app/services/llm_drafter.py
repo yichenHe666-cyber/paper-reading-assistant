@@ -71,7 +71,7 @@ related_papers: []
 - Papers We Love 社区笔记：{paper.get('community_notes_url', '')}
 {"".join([f'- 概念卡片: [[{c}]]\n' for c in concepts_list])}
 ---
-*由经典论文精读助手生成 | 源仓库: papers-we-love*"""
+*由核动力科研牛马生成 | 源仓库: papers-we-love*"""
 
         builder.add_raw_section(
             "请生成完整的 Markdown 论文笔记（直接返回 Markdown，不要用代码块包裹）。格式如下：",

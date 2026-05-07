@@ -256,6 +256,40 @@ def one_click_generate(data: dict, db: Session = Depends(get_db)):
                     ]
                 else:
                     results["concept_cards"] = []
+            try:
+                import threading
+                from app.services.memory_distiller import memory_distiller
+                reading_result_for_distill = {
+                    "paper": paper,
+                    "r1_output": first_pass,
+                    "r2_formal": formal_decon,
+                    "r2_critical": cr_for_synthesis,
+                    "r3_note": note if isinstance(note, str) else str(note),
+                }
+                def _distill_and_observe(pid, rr):
+                    from app.database.session import SessionLocal
+                    db_local = SessionLocal()
+                    try:
+                        memory_distiller.distill_reading_session(pid, rr)
+                    except Exception:
+                        pass
+                    try:
+                        from app.services.memory_observer import memory_observer
+                        memory_observer.run_consolidation_cycle(db_local)
+                    except Exception:
+                        pass
+                    finally:
+                        db_local.close()
+
+                t = threading.Thread(
+                    target=_distill_and_observe,
+                    args=(paper_id, reading_result_for_distill),
+                    daemon=True,
+                )
+                t.start()
+                results["_distill_triggered"] = True
+            except Exception:
+                pass
     else:
         errors.append("smart_note: 缺少 R1/R2 输出")
 

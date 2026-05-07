@@ -154,9 +154,30 @@ with tab_research:
             st.metric("研究成本", f"${result.get('research_costs', 0):.4f}")
             if result.get("source_urls"):
                 st.metric("参考来源数", len(result["source_urls"]))
+            if result.get("retriever_used"):
+                st.metric("搜索引擎", result["retriever_used"])
 
         with col_a:
             st.markdown(f"**研究问题：** {result.get('query', '')}")
+
+        quality = result.get("quality_metrics", {})
+        if quality:
+            q_col1, q_col2, q_col3 = st.columns(3)
+            with q_col1:
+                st.metric("来源质量占比", f"{quality.get('high_quality_ratio', 0):.0%}")
+            with q_col2:
+                st.metric("平均新鲜度", f"{quality.get('avg_freshness_days', 0):.0f}天")
+            with q_col3:
+                st.metric("覆盖度", f"{quality.get('coverage_score', 0):.0%}")
+            if quality.get("warning"):
+                st.warning(quality["warning"])
+
+        fallback_log = result.get("search_fallback_log") or result.get("fallback_log", [])
+        if fallback_log:
+            with st.expander("🔄 搜索引擎降级日志"):
+                for entry in fallback_log:
+                    status_icon = {"skipped": "⏭️", "empty": "📭", "error": "❌", "exhausted": "💀"}.get(entry.get("status", ""), "🔍")
+                    st.markdown(f"{status_icon} **{entry.get('retriever', '?')}** — {entry.get('status', '?')}: {entry.get('reason', '')}")
 
         if result.get("report_content"):
             with st.expander("📝 研究报告", expanded=True):
@@ -218,6 +239,28 @@ with tab_history:
 
             if status == "completed" and r.get("report_content"):
                 with st.expander(f"查看报告 — {r.get('query', '')[:30]}..."):
+                    r_quality = r.get("quality_metrics", {})
+                    if r_quality:
+                        rq1, rq2, rq3 = st.columns(3)
+                        with rq1:
+                            st.metric("来源质量", f"{r_quality.get('high_quality_ratio', 0):.0%}")
+                        with rq2:
+                            st.metric("新鲜度", f"{r_quality.get('avg_freshness_days', 0):.0f}天")
+                        with rq3:
+                            st.metric("覆盖度", f"{r_quality.get('coverage_score', 0):.0%}")
+                        if r_quality.get("warning"):
+                            st.warning(r_quality["warning"])
+
+                    if r.get("retriever_used"):
+                        st.caption(f"🔍 搜索引擎: {r['retriever_used']}")
+
+                    r_fallback = r.get("search_fallback_log", [])
+                    if r_fallback:
+                        with st.expander("降级日志"):
+                            for entry in r_fallback:
+                                status_icon = {"skipped": "⏭️", "empty": "📭", "error": "❌", "exhausted": "💀"}.get(entry.get("status", ""), "🔍")
+                                st.markdown(f"{status_icon} **{entry.get('retriever', '?')}** — {entry.get('status', '?')}: {entry.get('reason', '')}")
+
                     st.markdown(r["report_content"])
 
                     if r.get("source_urls"):

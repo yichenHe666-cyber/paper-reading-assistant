@@ -1,6 +1,8 @@
 import json
 from app.services.llm_service_base import BaseLLMService
 from app.services.llm_prompt_builder import PromptBuilder
+from app.services.memory_engine import memory_engine
+from app.database.session import SessionLocal
 
 
 def _infer_paper_type(title: str, abstract: str) -> str:
@@ -95,6 +97,15 @@ class AcademicReadingEngineService(BaseLLMService):
         )
         builder.add_paper_context(paper)
         builder.add_context("已自动推断", f"paper_type={paper_type}, math_intensity={math_intensity}")
+
+        db = SessionLocal()
+        try:
+            paper_id = paper.get("id")
+            memory_segment = memory_engine.recall_for_context(db, paper_id=paper_id, call_type="academic_reading")
+            if memory_segment:
+                builder.inject_memory(memory_segment)
+        finally:
+            db.close()
 
         if table_of_contents:
             builder.add_context("目录结构", table_of_contents)

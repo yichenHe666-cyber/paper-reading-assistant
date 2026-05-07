@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models.paper import Paper
 from app.models.topic import Topic
-from app.services.wiki_operations import ingest_paper, query_wiki, lint_wiki
+from app.services.wiki_operations import ingest_document, ingest_paper, ingest_knowledge, query_wiki, lint_wiki
 
 router = APIRouter()
 
@@ -32,11 +32,40 @@ def ingest(data: dict, db: Session = Depends(get_db)):
     }
 
     try:
-        result = ingest_paper(paper_dict)
+        result = ingest_document(paper_dict)
         return result
     except Exception as e:
         return {
             "error": f"Ingest 失败: {str(e)}",
+            "hint": "请检查 LLM_API_KEY 是否正确配置在 .env 文件中"
+        }
+
+
+@router.post("/ingest-document")
+def ingest_doc(data: dict):
+    if not data.get("title"):
+        return {"error": "title is required"}
+    try:
+        return ingest_document(data)
+    except Exception as e:
+        return {
+            "error": f"Ingest 失败: {str(e)}",
+            "hint": "请检查 LLM_API_KEY 是否正确配置在 .env 文件中"
+        }
+
+
+@router.post("/ingest-knowledge")
+def ingest_know(data: dict):
+    document = data.get("document", {})
+    knowledge = data.get("knowledge", {})
+    edges = data.get("edges", [])
+    if not document.get("title"):
+        return {"error": "document.title is required"}
+    try:
+        return ingest_knowledge(document, knowledge, edges)
+    except Exception as e:
+        return {
+            "error": f"Ingest Knowledge 失败: {str(e)}",
             "hint": "请检查 LLM_API_KEY 是否正确配置在 .env 文件中"
         }
 

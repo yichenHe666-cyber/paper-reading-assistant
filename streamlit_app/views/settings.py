@@ -7,7 +7,7 @@ import os
 st.markdown(f"""
 <div class="main-header">
     <h1>{icon('gear', size='lg')} 设置</h1>
-    <p>管理经典论文精读助手的配置项</p>
+    <p>管理核动力科研牛马的配置项</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -216,6 +216,28 @@ with tab1:
         help="留空表示不修改。输入新密钥后会覆盖旧密钥。密钥以加密形式存储在本地 .env 文件中。",
     )
 
+    st.divider()
+    st.subheader("🧠 思考强度")
+    st.caption("控制模型的思考深度（仅 DeepSeek 等支持 thinking 模式的模型生效）")
+
+    current_reasoning = _read_env_value("LLM_REASONING_EFFORT", "high")
+    reasoning_options = {
+        "disabled": "disabled — 关闭思考模式（响应最快，适合简单任务）",
+        "high": "high — 标准思考深度（默认，平衡质量与速度）",
+        "max": "max — 最大思考深度（适合复杂推理、数学证明、代码调试）",
+    }
+    reasoning_display = list(reasoning_options.values())
+    reasoning_values = list(reasoning_options.keys())
+    reasoning_idx = reasoning_values.index(current_reasoning) if current_reasoning in reasoning_values else 1
+
+    selected_reasoning_display = st.selectbox(
+        "思考强度",
+        options=reasoning_display,
+        index=reasoning_idx,
+        help="disabled: 模型直接输出答案，不展示思维链\nhigh: 模型先思考再回答，适合大多数任务\nmax: 模型分配最大比例 token 用于推理，适合高难度任务",
+    )
+    selected_reasoning = reasoning_values[reasoning_display.index(selected_reasoning_display)]
+
     if st.button("💾 保存 LLM 配置", use_container_width=True, type="primary"):
         errors = []
         if not final_model:
@@ -232,6 +254,7 @@ with tab1:
                     "LLM_PROVIDER": provider,
                     "LLM_MODEL": final_model,
                     "LLM_API_BASE": api_base.strip(),
+                    "LLM_REASONING_EFFORT": selected_reasoning,
                 }
                 if api_key_input != masked:
                     updates["LLM_API_KEY"] = api_key_input

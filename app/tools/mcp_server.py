@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP Server for 经典论文精读助手
+MCP Server for 核动力科研牛马
 供 Claude Code / WorkBuddy 通过 stdio 调用
 
 启动方式:

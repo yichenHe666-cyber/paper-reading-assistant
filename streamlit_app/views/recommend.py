@@ -1,4 +1,5 @@
 import streamlit as st
+import html
 from streamlit_app.utils.api_client import post
 from streamlit_app.components.icon import icon
 from streamlit_app.components.card import card
@@ -22,9 +23,9 @@ with col1:
         if result.get("title"):
             card(
                 content=f"""
-                <div style="font-size:1.15rem; font-weight:600; color:var(--color-text-primary); margin-bottom:0.4rem;">{result.get('title', '')}</div>
+                <div style="font-size:1.15rem; font-weight:600; color:var(--color-text-primary); margin-bottom:0.4rem;">{html.escape(result.get('title', ''))}</div>
                 <div style="font-size:0.85rem; color:var(--color-text-secondary);">
-                    {icon('user', size='xs')} {result.get('authors', '')} | {icon('calendar', size='xs')} {result.get('year', '')} | {icon('signal', size='xs')} {result.get('difficulty', '')}
+                    {icon('user', size='xs')} {html.escape(result.get('authors', ''))} | {icon('calendar', size='xs')} {html.escape(str(result.get('year', '')))} | {icon('signal', size='xs')} {html.escape(result.get('difficulty', ''))}
                 </div>
                 """,
                 variant="default",
@@ -48,8 +49,8 @@ with col2:
             for r in result[:3]:
                 card(
                     content=f"""
-                    <div style="font-size:1.15rem; font-weight:600; color:var(--color-text-primary); margin-bottom:0.4rem;">{r.get('title', '')}</div>
-                    <div style="font-size:0.85rem; color:var(--color-text-secondary);">{icon('signal', size='xs')} {r.get('difficulty', '')}</div>
+                    <div style="font-size:1.15rem; font-weight:600; color:var(--color-text-primary); margin-bottom:0.4rem;">{html.escape(r.get('title', ''))}</div>
+                    <div style="font-size:0.85rem; color:var(--color-text-secondary);">{icon('signal', size='xs')} {html.escape(r.get('difficulty', ''))}</div>
                     """,
                     variant="default",
                     padding="1rem",

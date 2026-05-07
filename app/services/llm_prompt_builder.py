@@ -30,6 +30,8 @@ class PromptBuilder:
         self.output_format_label = "请以JSON格式返回（不要markdown代码块，只返回JSON）："
         self.constraints = []
         self.raw_sections = []
+        self._skill_segment = None
+        self._memory_segment = None
 
     def add_context(self, key: str, value: str):
         self.context_items.append((key, value))
@@ -77,6 +79,14 @@ class PromptBuilder:
         self.raw_sections.append((title, content))
         return self
 
+    def inject_skills(self, skill_segment: str):
+        self._skill_segment = skill_segment
+        return self
+
+    def inject_memory(self, memory_segment: str):
+        self._memory_segment = memory_segment
+        return self
+
     def build(self) -> str:
         parts = []
 
@@ -98,6 +108,17 @@ class PromptBuilder:
             if title:
                 parts.append(title)
             parts.append(content)
+            parts.append("")
+
+        if self._skill_segment:
+            parts.append("可用技能：")
+            parts.append(self._skill_segment)
+            parts.append("")
+
+        if self._memory_segment:
+            parts.append("## 相关记忆（仅供参考，优先相信论文原文）")
+            parts.append(self._memory_segment)
+            parts.append("优先相信论文原文和数学推导，记忆可能过时或不适用于当前论文。")
             parts.append("")
 
         if self.constraints:

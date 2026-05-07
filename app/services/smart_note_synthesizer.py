@@ -2,6 +2,8 @@ import json
 from datetime import date
 from app.services.llm_service_base import BaseLLMService
 from app.services.llm_prompt_builder import PromptBuilder
+from app.services.memory_engine import memory_engine
+from app.database.session import SessionLocal
 
 
 def _strip_code_block(content: str) -> str:
@@ -90,6 +92,15 @@ class SmartNoteSynthesizerService(BaseLLMService):
         builder.add_context("DOI", doi)
         builder.add_context("类型", paper_type)
         builder.add_context("数学强度", math_intensity)
+
+        db = SessionLocal()
+        try:
+            paper_id = paper.get("id")
+            memory_segment = memory_engine.recall_for_context(db, paper_id=paper_id, call_type="smart_note")
+            if memory_segment:
+                builder.inject_memory(memory_segment)
+        finally:
+            db.close()
 
         builder.add_raw_section(
             "## 输入数据",
@@ -205,7 +216,7 @@ tags: []
 
 ---
 
-*由学术论文精读助手生成 | 方法论: Keshav 三遍法 + Booth 批判审查框架*"""
+*由核动力科研牛马生成 | 方法论: Keshav 三遍法 + Booth 批判审查框架*"""
 
         builder.add_raw_section(
             "请严格按以下模板输出完整的 Markdown 笔记（包括 YAML frontmatter）：",

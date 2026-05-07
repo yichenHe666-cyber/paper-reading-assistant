@@ -1,4 +1,4 @@
-"""Design Tokens for 经典论文精读助手 UI System — Glassmorphism Dark Theme."""
+"""Design Tokens for 核动力科研牛马 UI System — Glassmorphism Dark Theme."""
 
 COLORS = {
     "primary": "#2dd4bf",
@@ -428,6 +428,7 @@ def get_global_css() -> str:
         background: linear-gradient(155deg, rgba(45, 212, 191, 0.12) 0%, rgba(14, 165, 233, 0.06) 40%, rgba(15, 23, 42, 0.3) 100%);
         padding: 2rem 2rem;
         border-radius: var(--radius-xl);
+        margin-top: -2rem !important;
         margin-bottom: 1.5rem;
         color: var(--color-text-primary);
         position: relative;
@@ -473,6 +474,28 @@ def get_global_css() -> str:
         z-index: 1;
     }}
 
+    /* ── Sidebar collapsed fix ── */
+    @keyframes stSidebarCollapsedZero {{
+        0%, 100% {{
+            width: 0px !important;
+            min-width: 0px !important;
+            max-width: 0px !important;
+            flex-basis: 0px !important;
+            padding: 0px !important;
+            border: none !important;
+        }}
+    }}
+
+    section[data-testid="stSidebar"][aria-expanded="false"] {{
+        animation: stSidebarCollapsedZero 10s infinite;
+    }}
+
+    section[data-testid="stSidebar"][aria-expanded="false"] ~ div {{
+        margin-left: 0px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }}
+
     /* ── Streamlit native overrides ── */
     .stCodeBlock {{ border-radius: var(--radius-xl) !important; background: rgba(0,0,0,0.3) !important; }}
     .stAlert {{ border-radius: var(--radius-xl) !important; border: 1px solid var(--color-border) !important; background: var(--color-surface_glass) !important; backdrop-filter: blur(20px); }}
@@ -516,7 +539,133 @@ def get_global_css() -> str:
     return css
 
 
+def _inject_sidebar_resizer(st_module):
+    js_code = """
+<script>
+(function() {
+    var doc = window.parent.document;
+    var SIDEBAR_SELECTOR = 'section[data-testid="stSidebar"]';
+    var APP_CONTAINER_SELECTOR = '[data-testid="stAppViewContainer"]';
+    var intervalId = null;
+    var isRunning = false;
+    var TICK_MS = 80;
+
+    function getSidebar() {
+        return doc.querySelector(SIDEBAR_SELECTOR);
+    }
+
+    function getSidebarFlexItem() {
+        var sb = getSidebar();
+        if (!sb) return null;
+        var container = doc.querySelector(APP_CONTAINER_SELECTOR);
+        if (!container) return null;
+        var el = sb;
+        while (el && el.parentElement !== container) {
+            el = el.parentElement;
+            if (!el) return null;
+        }
+        return el;
+    }
+
+    function isCollapsed() {
+        var sb = getSidebar();
+        return sb && sb.getAttribute('aria-expanded') === 'false';
+    }
+
+    function forceZero(el) {
+        if (!el) return;
+        var props = ['width', 'min-width', 'max-width', 'flex-basis'];
+        props.forEach(function(prop) {
+            if (el.style.getPropertyValue(prop) !== '0px') {
+                el.style.setProperty(prop, '0px', 'important');
+            }
+        });
+    }
+
+    function restore(el) {
+        if (!el) return;
+        ['width', 'min-width', 'max-width', 'flex-basis'].forEach(function(prop) {
+            el.style.removeProperty(prop);
+        });
+    }
+
+    function tick() {
+        if (!isCollapsed()) {
+            stop();
+            return;
+        }
+        forceZero(getSidebar());
+        forceZero(getSidebarFlexItem());
+    }
+
+    function start() {
+        if (isRunning) return;
+        isRunning = true;
+        // Streamlit sidebar collapse transition is 300ms; wait a tiny
+        // bit so our forced zero-width does not fight the transform.
+        setTimeout(function() {
+            if (!isRunning) return;
+            tick();
+            intervalId = setInterval(tick, TICK_MS);
+        }, 50);
+    }
+
+    function stop() {
+        isRunning = false;
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        restore(getSidebar());
+        restore(getSidebarFlexItem());
+    }
+
+    function onStateChange() {
+        isCollapsed() ? start() : stop();
+    }
+
+    function init() {
+        var sb = getSidebar();
+        if (!sb) {
+            setTimeout(init, 300);
+            return;
+        }
+
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                if (m.attributeName === 'aria-expanded') {
+                    onStateChange();
+                }
+            });
+        });
+        observer.observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
+
+        // Also watch style mutations as a safety net.
+        var styleObs = new MutationObserver(function() {
+            if (isCollapsed() && isRunning) tick();
+        });
+        styleObs.observe(sb, { attributes: true, attributeFilter: ['style'] });
+
+        onStateChange();
+    }
+
+    if (doc.readyState === 'loading') {
+        doc.addEventListener('DOMContentLoaded', function() {
+            setTimeout(init, 200);
+        });
+    } else {
+        setTimeout(init, 200);
+    }
+})();
+</script>
+"""
+    st_module.components.v1.html(js_code, height=0)
+
+
 def inject_theme():
     """Inject the global CSS into the current Streamlit session."""
     import streamlit as st
     st.markdown(get_global_css(), unsafe_allow_html=True)
+    _inject_sidebar_resizer(st)
+
+

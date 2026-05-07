@@ -150,5 +150,5 @@ created: {paper.get('_now', '')}
         acad_usage = (w.get("academic_usage", w.get("meaning_cn", "")))[:50]
         md += f"| {w['word']} | {w.get('phonetic', '')} | {w.get('meaning_cn', '')} | {acad_usage} | {coll} | {w.get('sentence', '')} |\n"
 
-    md += f"\n---\n*由经典论文精读助手生成*\n"
+    md += f"\n---\n*由核动力科研牛马生成*\n"
     return md

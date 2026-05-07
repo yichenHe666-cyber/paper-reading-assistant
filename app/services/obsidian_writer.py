@@ -88,7 +88,7 @@ related_papers: []
 - PDF链接：{paper.get('pdf_url', '')}
 - Papers We Love 社区笔记：{paper.get('community_notes_url', '') or ''}
 ---
-*由经典论文精读助手生成 | 源仓库: papers-we-love*
+*由核动力科研牛马生成 | 源仓库: papers-we-love*
 """
 
         if filepath.exists():
@@ -163,7 +163,7 @@ source: llm_generated
 （在此填写自己的理解）
 
 ---
-*由学术论文精读助手生成*
+*由核动力科研牛马生成*
 """
         filepath.write_text(content, encoding="utf-8")
         return str(filepath)
@@ -244,7 +244,7 @@ SORT file.cday DESC
 ```
 
 ---
-*由经典论文精读助手自动生成*
+*由核动力科研牛马自动生成*
 """
         filepath.write_text(content, encoding="utf-8")
         return str(filepath)

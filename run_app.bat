@@ -1,10 +1,13 @@
 @echo off
 cd /d "%~dp0"
 
+set PYTHONDONTWRITEBYTECODE=1
+set PYTHONUNBUFFERED=1
+
 if exist ".venv\Scripts\python.exe" (
-    .venv\Scripts\python.exe start_app.py
+    .venv\Scripts\python.exe -O start_app.py
 ) else (
-    python start_app.py
+    python -O start_app.py
 )
 
 if errorlevel 1 (

@@ -13,5 +13,6 @@ class LLMCall(Base):
     total_tokens = Column(Integer, nullable=False)
     cost_usd = Column(Float, nullable=False)
     duration_ms = Column(Integer, default=0)
+    reasoning_effort = Column(String, default="high")
     paper_id = Column(String)
     created_at = Column(String, default=func.now())

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+import html
 from streamlit_app.utils.api_client import get, post, patch, upload_pdf
 from streamlit_app.components.icon import icon
 from streamlit_app.components.card import card
@@ -48,18 +49,18 @@ st.subheader(paper.get("title", "Untitled"))
 
 meta_parts = []
 if authors_display:
-    meta_parts.append(f"**作者**: {authors_display}")
+    meta_parts.append(f"<b>作者</b>: {html.escape(authors_display)}")
 if paper.get("year"):
-    meta_parts.append(f"**年份**: {paper.get('year')}")
-meta_parts.append(f"**主题**: {paper.get('topic_name_cn', paper.get('topic_id', ''))}")
+    meta_parts.append(f"<b>年份</b>: {html.escape(str(paper.get('year')))}")
+meta_parts.append(f"<b>主题</b>: {html.escape(paper.get('topic_name_cn', paper.get('topic_id', '')))}")
 if paper.get("subtopic"):
-    meta_parts.append(f"**子主题**: {paper.get('subtopic')}")
+    meta_parts.append(f"<b>子主题</b>: {html.escape(paper.get('subtopic'))}")
 if paper.get("venue"):
-    meta_parts.append(f"**会议/期刊**: {paper.get('venue')}")
+    meta_parts.append(f"<b>会议/期刊</b>: {html.escape(paper.get('venue'))}")
 if paper.get("doi"):
-    meta_parts.append(f"**DOI**: {paper.get('doi')}")
+    meta_parts.append(f"<b>DOI</b>: {html.escape(paper.get('doi'))}")
 
-st.caption(f"{icon('info', size='xs')} ｜ ".join(meta_parts))
+st.markdown(f"<p style='font-size:0.85rem;color:var(--color-text-secondary);'>{icon('info', size='xs')} ｜ {' ｜ '.join(meta_parts)}</p>", unsafe_allow_html=True)
 
 col_pdf, col_notes = st.columns(2)
 with col_pdf:
@@ -71,9 +72,9 @@ with col_pdf:
         if is_local_upload:
             st.button("📤 本地已上传", disabled=True, use_container_width=True)
         elif pdf_url.startswith("https://github.com/papers-we-love/papers-we-love/blob/master/"):
-            st.link_button(f"{icon('link', size='sm')} GitHub 源链接", pdf_url, use_container_width=True)
+            st.link_button("GitHub 源链接", pdf_url, use_container_width=True)
         else:
-            st.link_button(f"{icon('link', size='sm')} 外部 PDF 链接", pdf_url, use_container_width=True)
+            st.link_button("外部 PDF 链接", pdf_url, use_container_width=True)
         if st.button("⬇️ 下载并提取 PDF 文本", key="dl_pdf", use_container_width=True):
             with st.spinner("正在下载并提取 PDF 文本..."):
                 dl_result = post("/api/reading/download-pdf", {"paper_id": paper_id})
@@ -107,7 +108,7 @@ with col_pdf:
         st.button("📄 暂无 PDF", disabled=True, use_container_width=True)
 
     st.divider()
-    st.markdown(f"**{icon('upload', size='sm')} 手动上传 PDF**")
+    st.markdown(f"<b>{icon('upload', size='sm')} 手动上传 PDF</b>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
         "选择本地 PDF 文件",
         type=["pdf"],
@@ -147,7 +148,7 @@ with col_notes:
     if not notes_url and paper.get("topic_id"):
         notes_url = f"https://github.com/papers-we-love/papers-we-love/tree/master/{paper['topic_id']}#readme"
     if notes_url:
-        st.link_button(f"{icon('comments', size='sm')} 社区笔记", notes_url, use_container_width=True)
+        st.link_button("社区笔记", notes_url, use_container_width=True)
     else:
         st.button("💬 暂无社区笔记", disabled=True, use_container_width=True)
 
@@ -156,7 +157,7 @@ if st.session_state.get("show_pdf_viewer", False) and paper.get("pdf_url"):
     pdf_url = paper["pdf_url"]
     is_local = pdf_url.startswith("local://uploaded/")
     if is_local:
-        st.info(f"{icon('upload', size='sm')} 本地上传的 PDF 请使用下方「下载并提取 PDF 文本」按钮进行 AI 阅读分析")
+        st.info("本地上传的 PDF 请使用下方「下载并提取 PDF 文本」按钮进行 AI 阅读分析")
         st.markdown(f"""
         <div style="border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; text-align: center; background: var(--color-bg);">
             <p style="font-size: 1.2em; margin-bottom: 10px;">{icon('file_pdf', size='lg')}</p>
@@ -168,7 +169,7 @@ if st.session_state.get("show_pdf_viewer", False) and paper.get("pdf_url"):
             pdf_url = pdf_url.replace("/blob/", "/raw/")
         st.markdown(f"""
         <iframe 
-            src="{pdf_url}" 
+            src="{html.escape(pdf_url, quote=True)}" 
             width="100%" 
             height="800px" 
             style="border: 1px solid var(--color-border); border-radius: var(--radius-lg);"
@@ -190,13 +191,15 @@ has_gen = bool(gen)
 if "reading_round" not in st.session_state:
     st.session_state.reading_round = "R1"
 
+st.markdown(f"<p style='font-size:0.9rem;font-weight:500;'>{icon('ruler_combined', size='sm')} 阅读轮次（Keshav 三遍法）</p>", unsafe_allow_html=True)
 st.radio(
-    f"{icon('ruler_combined', size='sm')} 阅读轮次（Keshav 三遍法）",
+    "选择阅读轮次",
     ["R1 浏览", "R2 精读", "R3 深度"],
     horizontal=True,
     key="reading_round_selector",
     index=["R1","R2","R3"].index(st.session_state.reading_round) if st.session_state.reading_round in ["R1","R2","R3"] else 0,
-    help="R1=第一遍5C摘要·阅读策略 | R2=形式化拆解·批判审查 | R3=完整学术笔记"
+    help="R1=第一遍5C摘要·阅读策略 | R2=形式化拆解·批判审查 | R3=完整学术笔记",
+    label_visibility="collapsed",
 )
 
 if st.session_state.reading_round_selector != st.session_state.reading_round:
@@ -217,15 +220,15 @@ has_r2 = bool(formal_decon) or bool(critical_review)
 has_r3 = bool(note_draft) and has_r2
 
 # ── Determine tabs based on round ──
-tabs_available = [f"{icon('sparkles', size='sm')} 一键生成"]
+tabs_available = ["一键生成"]
 if reading_round in ("R1", "R2", "R3"):
-    tabs_available.append(f"{icon('search', size='sm')} 5C摘要")
+    tabs_available.append("5C摘要")
 if reading_round in ("R2", "R3"):
-    tabs_available.extend([f"{icon('calculator', size='sm')} 形式化拆解", f"{icon('scale_balanced', size='sm')} 批判性审查"])
+    tabs_available.extend(["形式化拆解", "批判性审查"])
 if reading_round in ("R3",):
-    tabs_available.append(f"{icon('pen_to_square', size='sm')} 完整笔记")
-tabs_available.append(f"{icon('book', size='sm')} 专业词汇")
-tabs_available.append(f"{icon('microscope', size='sm')} 相关研究")
+    tabs_available.append("完整笔记")
+tabs_available.append("专业词汇")
+tabs_available.append("相关研究")
 
 tab_objects = st.tabs(tabs_available)
 
@@ -251,11 +254,11 @@ with tab_objects[0]:
 
     if need_generate:
         gen_label = {
-            "R1": f"{icon('sparkles', size='sm')} R1 第一遍浏览",
-            "R2": f"{icon('sparkles', size='sm')} R2 精读分析",
-            "R3": f"{icon('sparkles', size='sm')} R3 深度合成",
+            "R1": "R1 第一遍浏览",
+            "R2": "R2 精读分析",
+            "R3": "R3 深度合成",
         }
-        if st.button(gen_label.get(reading_round, f"{icon('sparkles', size='sm')} 一键生成"), use_container_width=True, type="primary"):
+        if st.button(gen_label.get(reading_round, "一键生成"), use_container_width=True, type="primary"):
             with st.spinner(f"正在执行 {reading_round} 分析..."):
                 result = post("/api/reading/one-click", {"paper_id": paper_id, "reading_round": reading_round})
 
@@ -307,7 +310,7 @@ with tab_objects[0]:
                        "形式化拆解": "formal_decon", "批判审查": "critical_review", "完整笔记": "note_draft"}
             has_it = bool(gen.get(key_map.get(col_name, "")))
             with metrics_cols[i]:
-                st.metric(col_name, icon("check", size="sm") if has_it else icon("xmark", size="sm"))
+                st.metric(col_name, "✅" if has_it else "❌")
 
 # ══════════════════════════════════════
 # TAB: 5C摘要
@@ -324,34 +327,34 @@ if len(tab_objects) > 1:
             st.subheader("🔍 5C 摘要分析")
             five_c = first_pass.get("5c_summary", {})
             if five_c:
-                st.markdown(f"**Category（类别）**: {five_c.get('category', 'N/A')}")
-                st.markdown(f"**Context（背景）**: {five_c.get('context', 'N/A')}")
-                st.markdown(f"**Correctness（核心主张）**: {five_c.get('correctness', 'N/A')}")
-                st.markdown(f"**Contribution（贡献）**: {five_c.get('contribution', 'N/A')}")
-                st.markdown(f"**Clarity（写作质量）**: {five_c.get('clarity', 'N/A')}")
+                st.markdown(f"**Category（类别）**: {html.escape(five_c.get('category', 'N/A'))}")
+                st.markdown(f"**Context（背景）**: {html.escape(five_c.get('context', 'N/A'))}")
+                st.markdown(f"**Correctness（核心主张）**: {html.escape(five_c.get('correctness', 'N/A'))}")
+                st.markdown(f"**Contribution（贡献）**: {html.escape(five_c.get('contribution', 'N/A'))}")
+                st.markdown(f"**Clarity（写作质量）**: {html.escape(five_c.get('clarity', 'N/A'))}")
 
-            st.markdown(f"### {icon('compass', size='sm')} 阅读策略")
+            st.markdown(f"### {icon('compass', size='sm')} 阅读策略", unsafe_allow_html=True)
             strategy = first_pass.get("reading_strategy", {})
             if strategy:
-                st.markdown(f"- **阅读顺序**: {strategy.get('order', '')}")
-                st.markdown(f"- **重点聚焦**: {strategy.get('focus', '')}")
-                st.markdown(f"- **预计时间**: {strategy.get('estimated_time', '')}")
-                st.markdown(f"- **建议**: **{strategy.get('skip_or_read', '')}**")
+                st.markdown(f"- **阅读顺序**: {html.escape(strategy.get('order', ''))}")
+                st.markdown(f"- **重点聚焦**: {html.escape(strategy.get('focus', ''))}")
+                st.markdown(f"- **预计时间**: {html.escape(strategy.get('estimated_time', ''))}")
+                st.markdown(f"- **建议**: **{html.escape(strategy.get('skip_or_read', ''))}**")
 
-            st.markdown(f"### {icon('triangle_exclamation', size='sm')} 警告标志")
+            st.markdown(f"### {icon('triangle_exclamation', size='sm')} 警告标志", unsafe_allow_html=True)
             warnings = first_pass.get("warning_flags", [])
             if warnings:
                 for w in warnings:
-                    st.warning(f"**{w.get('flag', '')}** — {w.get('impact', '')} （{w.get('evidence', '')}）")
+                    st.warning(f"**{html.escape(w.get('flag', ''))}** — {html.escape(w.get('impact', ''))} （{html.escape(w.get('evidence', ''))}）")
 
             bg = first_pass.get("assumptions_background", {})
             if bg:
-                with st.expander(f"{icon('book', size='sm')} 前置知识与理论背景"):
+                with st.expander(f"{icon('book', size='sm')} 前置知识与理论背景", icon=False):
                     if bg.get("prerequisites"):
                         st.markdown("**前置知识**：")
                         for p in bg["prerequisites"]:
-                            st.markdown(f"- {p}")
-                    st.markdown(f"**理论背景**: {bg.get('theory_background', '')}")
+                            st.markdown(f"- {html.escape(str(p))}")
+                    st.markdown(f"**理论背景**: {html.escape(bg.get('theory_background', ''))}")
 
 # ── TAB: 形式化拆解 ──
 form_tab_idx = 2 if reading_round in ("R2", "R3") else None
@@ -369,8 +372,8 @@ if form_tab_idx and form_tab_idx < len(tab_objects):
             if syms:
                 st.markdown("### 符号表")
                 st.dataframe(
-                    [{"符号": s.get("symbol", ""), "含义": s.get("meaning", ""),
-                      "位置": s.get("location", ""), "类型": s.get("type", "")} for s in syms],
+                    [{"符号": html.escape(s.get("symbol", "")), "含义": html.escape(s.get("meaning", "")),
+                      "位置": html.escape(s.get("location", "")), "类型": html.escape(s.get("type", ""))} for s in syms],
                     use_container_width=True, hide_index=True
                 )
 
@@ -380,9 +383,9 @@ if form_tab_idx and form_tab_idx < len(tab_objects):
                 for t in theorems:
                     card(
                         content=f"""
-                        <b>{icon('ruler_combined', size='sm')} {t.get('statement', '')[:100]}</b><br/>
-                        <span style="color:var(--color-text-secondary);">策略: {t.get('proof_strategy', '')} | 位置: {t.get('location', '')}</span>
-                        <p>{t.get('proof_summary', '')}</p>
+                        <b>{icon('ruler_combined', size='sm')} {html.escape(t.get('statement', '')[:100])}</b><br/>
+                        <span style="color:var(--color-text-secondary);">策略: {html.escape(t.get('proof_strategy', ''))} | 位置: {html.escape(t.get('location', ''))}</span>
+                        <p>{html.escape(t.get('proof_summary', ''))}</p>
                         """,
                         variant="default",
                         padding="1rem",
@@ -390,24 +393,24 @@ if form_tab_idx and form_tab_idx < len(tab_objects):
 
             derivs = formal_decon.get("derivation_checks", [])
             if derivs:
-                st.markdown(f"### {icon('search', size='sm')} 需手动推导的跳步")
+                st.markdown(f"### {icon('search', size='sm')} 需手动推导的跳步", unsafe_allow_html=True)
                 for i, d in enumerate(derivs):
-                    with st.expander(f"跳步 {i+1}: {d.get('gap_description', '')[:60]}..."):
-                        st.markdown(f"**位置**: {d.get('location', '')}")
-                        st.markdown(f"**描述**: {d.get('gap_description', '')}")
+                    with st.expander(f"跳步 {i+1}: {html.escape(d.get('gap_description', '')[:60])}..."):
+                        st.markdown(f"**位置**: {html.escape(d.get('location', ''))}")
+                        st.markdown(f"**描述**: {html.escape(d.get('gap_description', ''))}")
                         st.text_area("我的推导", key=f"my_derivation_{i}", placeholder="在此填写你的推导过程...", height=100)
 
             bounds = formal_decon.get("boundary_conditions", [])
             if bounds:
-                st.markdown(f"### {icon('bolt', size='sm')} 边界条件")
+                st.markdown(f"### {icon('bolt', size='sm')} 边界条件", unsafe_allow_html=True)
                 for b in bounds:
-                    st.info(f"**假设**: {b.get('assumption', '')} ({b.get('type', '')}) → 违反后果: {b.get('violation_consequence', '')}")
+                    st.info(f"**假设**: {html.escape(b.get('assumption', ''))} ({html.escape(b.get('type', ''))}) → 违反后果: {html.escape(b.get('violation_consequence', ''))}")
 
             gaps = formal_decon.get("formal_gaps", [])
             if gaps:
-                st.markdown(f"### {icon('circle_exclamation', size='sm')} 形式化缺失警告")
+                st.markdown(f"### {icon('circle_exclamation', size='sm')} 形式化缺失警告", unsafe_allow_html=True)
                 for g in gaps:
-                    st.error(f"**{g.get('concept', '')}** @ {g.get('mention_location', '')}: {g.get('missing', '')}")
+                    st.error(f"**{html.escape(g.get('concept', ''))}** @ {html.escape(g.get('mention_location', ''))}: {html.escape(g.get('missing', ''))}")
 
 # ── TAB: 批判性审查 ──
 crit_tab_idx = form_tab_idx + 1 if form_tab_idx else None
@@ -424,27 +427,27 @@ if crit_tab_idx and crit_tab_idx < len(tab_objects):
 
             findings = critical_review.get("findings", [])
             if findings:
-                severity_icon = {"fatal": icon("circle_xmark", size="sm"), "serious": icon("triangle_exclamation", size="sm"),
-                                 "minor": icon("circle_exclamation", size="sm"), "negligible": icon("circle_info", size="sm")}
+                severity_icon = {"fatal": "❌", "serious": "⚠️",
+                                 "minor": "⚡", "negligible": "ℹ️"}
                 for f in sorted(findings, key=lambda x: {"fatal": 0, "serious": 1, "minor": 2, "negligible": 3}.get(x.get("severity", ""), 4)):
                     sev = f.get("severity", "")
-                    icon_html = severity_icon.get(sev, icon("circle_info", size="sm"))
+                    icon_emoji = severity_icon.get(sev, "ℹ️")
                     if sev in ("fatal", "serious"):
-                        st.error(f"{icon_html} **[{sev.upper()}]** {f.get('issue', '')}")
+                        st.error(f"{icon_emoji} **[{sev.upper()}]** {html.escape(f.get('issue', ''))}")
                     elif sev == "minor":
-                        st.warning(f"{icon_html} **[{sev.upper()}]** {f.get('issue', '')}")
+                        st.warning(f"{icon_emoji} **[{sev.upper()}]** {html.escape(f.get('issue', ''))}")
                     else:
-                        st.info(f"{icon_html} [{sev}] {f.get('issue', '')}")
-                    st.caption(f"证据: {f.get('evidence', '')} | 审稿意见: {f.get('reviewer_comment', '')}")
+                        st.info(f"{icon_emoji} [{sev}] {html.escape(f.get('issue', ''))}")
+                    st.caption(f"证据: {html.escape(f.get('evidence', ''))} | 审稿意见: {html.escape(f.get('reviewer_comment', ''))}")
 
             cross = critical_review.get("cross_paper_findings", [])
             if cross:
-                st.markdown(f"### {icon('link', size='sm')} 跨论文对比发现")
+                st.markdown(f"### {icon('link', size='sm')} 跨论文对比发现", unsafe_allow_html=True)
                 for cp in cross:
-                    rel_icon = {"contradiction": icon("xmark", size="sm"), "extension": icon("arrow_right", size="sm"),
-                                "supersedes": icon("arrow_up", size="sm"), "alternative": icon("rotate", size="sm")}
-                    st.markdown(f"{rel_icon.get(cp.get('relationship', ''), '')} **{cp.get('issue', '')}** — 关联: {cp.get('related_paper', '')}")
-                    st.caption(cp.get("detail", ""))
+                    rel_icon = {"contradiction": "❌", "extension": "➡️",
+                                "supersedes": "⬆️", "alternative": "🔄"}
+                    st.markdown(f"{rel_icon.get(cp.get('relationship', ''), '')} **{html.escape(cp.get('issue', ''))}** — 关联: {html.escape(cp.get('related_paper', ''))}")
+                    st.caption(html.escape(cp.get("detail", "")))
 
 # ── TAB: 完整笔记 (R3 only) ──
 note_tab_idx = None
@@ -514,28 +517,28 @@ with tab_objects[vocab_tab_idx]:
 
         col_meta1, col_meta2 = st.columns(2)
         with col_meta1:
-            st.metric(f"{icon('microscope', size='sm')} 专业术语", len(cs))
+            st.metric("专业术语", len(cs))
         with col_meta2:
-            st.metric(f"{icon('language', size='sm')} 学术词汇", len(adv))
+            st.metric("学术词汇", len(adv))
 
         if cs:
-            st.markdown(f"### {icon('microscope', size='sm')} 计算机专业术语")
+            st.markdown(f"### {icon('microscope', size='sm')} 计算机专业术语", unsafe_allow_html=True)
             st.dataframe(
-                [{"术语": w['word'], "音标": w.get('phonetic', ''), "学术定义": (w.get('formal_definition', w.get('meaning_cn', '')))[:60],
-                  "上下文": (w.get('context_in_paper', ''))[:40]} for w in cs],
+                [{"术语": html.escape(w['word']), "音标": html.escape(w.get('phonetic', '')), "学术定义": html.escape((w.get('formal_definition', w.get('meaning_cn', '')))[:60]),
+                  "上下文": html.escape((w.get('context_in_paper', ''))[:40])} for w in cs],
                 use_container_width=True, hide_index=True
             )
 
         if adv:
-            st.markdown(f"### {icon('language', size='sm')} 学术英语词汇")
+            st.markdown(f"### {icon('language', size='sm')} 学术英语词汇", unsafe_allow_html=True)
             st.dataframe(
-                [{"词汇": w['word'], "音标": w.get('phonetic', ''), "学术用法": (w.get('academic_usage', w.get('meaning_cn', '')))[:50],
-                  "搭配": ", ".join(w.get('collocations', [])[:2])} for w in adv],
+                [{"词汇": html.escape(w['word']), "音标": html.escape(w.get('phonetic', '')), "学术用法": html.escape((w.get('academic_usage', w.get('meaning_cn', '')))[:50]),
+                  "搭配": ", ".join(html.escape(c) for c in w.get('collocations', [])[:2])} for w in adv],
                 use_container_width=True, hide_index=True
             )
 
         if vocab_md:
-            with st.expander(f"{icon('file_lines', size='sm')} 查看 Markdown 源码"):
+            with st.expander("查看 Markdown 源码"):
                 st.code(vocab_md, language="markdown")
 
 # ── TAB: 相关研究 (AI Research) ──
@@ -575,7 +578,7 @@ with tab_objects[research_tab_idx]:
 
     if st.button("🚀 发起相关研究", key="start_research_btn", use_container_width=True):
         if research_query.strip():
-            with st.spinner(f"{icon('spinner', size='sm')} AI 正在搜索和分析相关研究，请耐心等待..."):
+            with st.spinner("AI 正在搜索和分析相关研究，请耐心等待..."):
                 result = post("/api/research/sync", {
                     "query": research_query.strip(),
                     "report_type": r_report_type[1],
@@ -592,7 +595,7 @@ with tab_objects[research_tab_idx]:
             st.warning("请输入研究问题")
 
     st.markdown("---")
-    st.markdown(f"#### {icon('list', size='sm')} 已关联的研究报告")
+    st.markdown(f"#### {icon('list', size='sm')} 已关联的研究报告", unsafe_allow_html=True)
 
     try:
         related = get(f"/api/research/paper/{paper_id}/related")
@@ -609,15 +612,15 @@ with tab_objects[research_tab_idx]:
     else:
         for rr in related_reports:
             r_status = rr.get("status", "unknown")
-            status_icon_map = {"pending": icon("clock", size="sm"), "completed": icon("check", size="sm"), "failed": icon("xmark", size="sm")}
-            status_icon = status_icon_map.get(r_status, icon("question", size="sm"))
+            status_icon_map = {"pending": "⏳", "completed": "✅", "failed": "❌"}
+            status_icon = status_icon_map.get(r_status, "❓")
             card(
                 content=f"""
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                     <div>
-                        <div style="font-weight:600; color:var(--color-text-primary);">{status_icon} {rr.get('query', 'N/A')}</div>
+                        <div style="font-weight:600; color:var(--color-text-primary);">{status_icon} {html.escape(rr.get('query', 'N/A'))}</div>
                         <div style="font-size:0.8rem; color:var(--color-text-muted);">
-                            类型: {rr.get('report_type', '')} | 成本: ${rr.get('research_costs', 0):.4f} | {rr.get('created_at', '')}
+                            类型: {html.escape(rr.get('report_type', ''))} | 成本: ${rr.get('research_costs', 0):.4f} | {html.escape(rr.get('created_at', ''))}
                         </div>
                     </div>
                 </div>
@@ -630,6 +633,6 @@ with tab_objects[research_tab_idx]:
                 with st.expander("查看报告"):
                     st.markdown(rr["report_content"])
                     if rr.get("source_urls"):
-                        st.markdown(f"**{icon('link', size='sm')} 参考来源：**")
+                        st.markdown(f"**参考来源：**")
                         for url in rr["source_urls"]:
-                            st.markdown(f"- [{url}]({url})")
+                            st.markdown(f"- [{html.escape(url)}]({html.escape(url, quote=True)})")

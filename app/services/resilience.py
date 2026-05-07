@@ -1,5 +1,6 @@
 import time
 import logging
+import threading
 from functools import wraps
 
 logger = logging.getLogger("paper_reader")
@@ -30,6 +31,25 @@ def llm_retry(max_retries: int = 3, base_delay: float = 1.0):
             raise RuntimeError(f"LLM 调用 {max_retries} 次后仍失败: {str(last_error)[:200]}") if last_error else None
         return wrapper
     return decorator
+
+
+class RateLimiter:
+    def __init__(self, min_interval: float = 3.0):
+        self._min_interval = min_interval
+        self._last_call = 0.0
+        self._lock = threading.Lock()
+
+    def wait(self):
+        with self._lock:
+            elapsed = time.time() - self._last_call
+            if elapsed < self._min_interval:
+                wait = self._min_interval - elapsed
+                time.sleep(wait)
+            self._last_call = time.time()
+
+    def reset(self):
+        with self._lock:
+            self._last_call = 0.0
 
 
 def safe_file_write(filepath, content: str, encoding: str = "utf-8"):

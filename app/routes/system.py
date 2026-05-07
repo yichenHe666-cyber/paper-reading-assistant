@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.get("/health")
 def health():
-    return {"status": "ok", "service": "经典论文精读助手"}
+    return {"status": "ok", "service": "核动力科研牛马"}
 
 
 @router.get("/llm-cost")

@@ -1,10 +1,16 @@
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from app.database.session import SessionLocal, engine
 
 
+def _fts_table_exists():
+    inspector = inspect(engine)
+    return "papers_fts" in inspector.get_table_names()
+
+
 def init_fts():
+    if _fts_table_exists():
+        return
     with engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS papers_fts"))
         conn.execute(text("""
             CREATE VIRTUAL TABLE papers_fts USING fts5(
                 title, abstract, authors, content=papers, content_rowid=rowid
@@ -37,6 +43,15 @@ def init_fts():
             END
         """))
         conn.commit()
+
+
+def rebuild_fts():
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS papers_fts"))
+        for trigger in ['papers_ai', 'papers_ad', 'papers_au']:
+            conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
+        conn.commit()
+    init_fts()
 
 
 def search_papers_fts(query: str, limit: int = 20):

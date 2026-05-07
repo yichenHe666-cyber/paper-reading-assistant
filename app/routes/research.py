@@ -123,6 +123,9 @@ def create_research_sync(req: ResearchRequest, db: Session = Depends(get_db)):
         source_urls=json.dumps(result.get("source_urls", []), ensure_ascii=False),
         visited_urls=json.dumps(result.get("visited_urls", []), ensure_ascii=False),
         research_costs=result.get("costs", 0.0),
+        quality_metrics=json.dumps(result.get("quality_metrics", {}), ensure_ascii=False),
+        retriever_used=result.get("retriever_used", ""),
+        search_fallback_log=json.dumps(result.get("fallback_log", []), ensure_ascii=False),
         status="completed",
     )
     db.add(report)
@@ -173,6 +176,8 @@ def get_paper_research(paper_id: str, db: Session = Depends(get_db)):
 def _report_to_dict(r: ResearchReport) -> dict:
     source_urls = []
     visited_urls = []
+    quality_metrics = {}
+    fallback_log = []
     try:
         if r.source_urls:
             source_urls = json.loads(r.source_urls)
@@ -183,6 +188,16 @@ def _report_to_dict(r: ResearchReport) -> dict:
             visited_urls = json.loads(r.visited_urls)
     except (json.JSONDecodeError, TypeError):
         visited_urls = []
+    try:
+        if r.quality_metrics:
+            quality_metrics = json.loads(r.quality_metrics)
+    except (json.JSONDecodeError, TypeError):
+        quality_metrics = {}
+    try:
+        if r.search_fallback_log:
+            fallback_log = json.loads(r.search_fallback_log)
+    except (json.JSONDecodeError, TypeError):
+        fallback_log = []
 
     return {
         "id": r.id,
@@ -194,6 +209,9 @@ def _report_to_dict(r: ResearchReport) -> dict:
         "source_urls": source_urls,
         "visited_urls": visited_urls,
         "research_costs": r.research_costs,
+        "quality_metrics": quality_metrics,
+        "retriever_used": r.retriever_used,
+        "search_fallback_log": fallback_log,
         "status": r.status,
         "paper_id": r.paper_id,
         "created_at": r.created_at,
@@ -235,6 +253,9 @@ def _run_research_background(
             report.source_urls = json.dumps(result.get("source_urls", []), ensure_ascii=False)
             report.visited_urls = json.dumps(result.get("visited_urls", []), ensure_ascii=False)
             report.research_costs = result.get("costs", 0.0)
+            report.quality_metrics = json.dumps(result.get("quality_metrics", {}), ensure_ascii=False)
+            report.retriever_used = result.get("retriever_used", "")
+            report.search_fallback_log = json.dumps(result.get("fallback_log", []), ensure_ascii=False)
 
         db.commit()
     except Exception as e:

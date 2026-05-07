@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from app.services.llm_service_base import BaseLLMService
 from app.services.llm_prompt_builder import PromptBuilder
+from app.services.memory_engine import memory_engine
 from app.services.llm_utils import _call_llm, parse_llm_json_response
 from app.models.concept import UserConcept
 
@@ -85,6 +86,11 @@ class CriticalReviewerService(BaseLLMService):
         builder.add_context("论文类型", f"{paper_type} | 数学强度：{math_intensity}")
         builder.add_context("5C 摘要", json.dumps(five_c, ensure_ascii=False))
         builder.add_context("假设与背景", json.dumps(assumptions_bg, ensure_ascii=False))
+
+        if db is not None:
+            memory_segment = memory_engine.recall_for_context(db, paper_id=None, call_type="critical_review")
+            if memory_segment:
+                builder.inject_memory(memory_segment)
 
         if warning_flags:
             warnings_text = "\n".join(

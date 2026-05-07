@@ -8,3 +8,14 @@ from app.models.reading_history import ReadingHistory
 from app.models.llm_call import LLMCall
 from app.models.note_snapshot import NoteSnapshot
 from app.models.llm_cache import LLMCache
+from app.models.skill import Skill
+from app.models.research_memory import ResearchMemory
+from app.models.memory_entity import MemoryEntity, MemoryEntityLink
+from app.models.memory_observation import MemoryObservation
+from app.models.chat_session import ChatSession
+from app.models.chat_message import ChatMessage
+from app.models.workspace import Workspace
+from app.models.agent_rule import AgentRule
+from app.models.sandbox_record import SandboxRecord
+from app.models.knowledge_document import KnowledgeDocument
+from app.models.knowledge_edge import KnowledgeEdge

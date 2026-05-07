@@ -11,9 +11,9 @@ class BaseLLMService(ABC):
     def build_prompt(self, **kwargs) -> str:
         pass
 
-    def call_llm(self, prompt: str, max_tokens: int = None, enable_json_parsing: bool = True) -> tuple:
+    def call_llm(self, prompt: str, max_tokens: int = None, enable_json_parsing: bool = True, reasoning_effort: str = None) -> tuple:
         messages = [{"role": "user", "content": prompt}]
-        content, usage = _call_llm(messages, max_tokens=max_tokens)
+        content, usage = _call_llm(messages, max_tokens=max_tokens, reasoning_effort=reasoning_effort)
 
         if enable_json_parsing:
             result = parse_llm_json_response(content, self.service_name)

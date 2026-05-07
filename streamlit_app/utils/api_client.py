@@ -11,8 +11,16 @@ def _headers():
     return {}
 
 
+def health_check() -> bool:
+    try:
+        resp = requests.get(f"{API_BASE}/api/system/health", timeout=3, headers=_headers())
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 def get(endpoint: str):
-    resp = requests.get(f"{API_BASE}{endpoint}", timeout=30, headers=_headers())
+    resp = requests.get(f"{API_BASE}{endpoint}", timeout=10, headers=_headers())
     return resp.json()
 
 
@@ -23,6 +31,16 @@ def post(endpoint: str, data: dict = None):
 
 def patch(endpoint: str, data: dict):
     resp = requests.patch(f"{API_BASE}{endpoint}", json=data, timeout=30, headers=_headers())
+    return resp.json()
+
+
+def put(endpoint: str, data: dict):
+    resp = requests.put(f"{API_BASE}{endpoint}", json=data, timeout=30, headers=_headers())
+    return resp.json()
+
+
+def delete(endpoint: str):
+    resp = requests.delete(f"{API_BASE}{endpoint}", timeout=30, headers=_headers())
     return resp.json()
 
 
