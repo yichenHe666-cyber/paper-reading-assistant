@@ -31,7 +31,7 @@ with col1:
                 variant="default",
                 padding="1.25rem",
             )
-            st.info(f"{icon('lightbulb', size='sm')} {result.get('reason', '')}")
+            st.info(f"💡 {result.get('reason', '')}")
             if st.button("📖 开始精读这篇", key="start_rec", use_container_width=True):
                 st.session_state.selected_paper_id = result["id"]
                 st.session_state.generated = {}

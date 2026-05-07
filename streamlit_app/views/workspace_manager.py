@@ -55,7 +55,7 @@ with tab_list:
     else:
         for ws in workspaces:
             is_default = ws.get("is_default", False)
-            default_badge = badge("默认", variant="primary", size="xs") if is_default else ""
+            default_badge = badge("默认", variant="primary") if is_default else ""
             stats = ws.get("stats", {})
             card(
                 content=f"""

@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     knowledge_auto_extract: bool = True
     knowledge_dedup_enabled: bool = True
 
+    log_level: str = "INFO"
+    log_dir: str = "logs"
+    log_file_max_bytes: int = 5242880
+    log_file_backup_count: int = 5
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

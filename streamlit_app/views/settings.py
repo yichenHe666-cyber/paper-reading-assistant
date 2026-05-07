@@ -3,6 +3,9 @@ from streamlit_app.utils.api_client import get, post, patch
 from streamlit_app.components.icon import icon
 from streamlit_app.components.card import card
 import os
+import logging
+
+_log = logging.getLogger(__name__)
 
 st.markdown(f"""
 <div class="main-header">
@@ -92,7 +95,7 @@ PROVIDER_PRESETS = {
     },
 }
 PROVIDERS = list(PROVIDER_PRESETS.keys())
-CUSTOM_MARKER = f"{icon('pen', size='sm')} 自定义输入..."
+CUSTOM_MARKER = "✏️ 自定义输入..."
 
 # ── Helpers ─────────────────────────────────────────────────
 
@@ -136,6 +139,7 @@ def _update_env(updates: dict):
 
     with open(env_path_local, "w", encoding="utf-8") as f:
         f.writelines(lines)
+    _log.info("文件修改: %s", env_path_local)
 
 
 # ── Tabs ────────────────────────────────────────────────────
@@ -260,7 +264,7 @@ with tab1:
                     updates["LLM_API_KEY"] = api_key_input
                 _update_env(updates)
                 st.success("LLM 配置已保存，重启后端后生效")
-                st.info(f"{icon('lightbulb', size='sm')} 提示：由于配置读取有缓存，请重新启动 FastAPI 服务（端口 8000）以应用新配置。")
+                st.info("💡 提示：由于配置读取有缓存，请重新启动 FastAPI 服务（端口 8000）以应用新配置。")
             except Exception as e:
                 st.error(f"保存失败: {e}")
 

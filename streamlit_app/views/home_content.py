@@ -1,10 +1,24 @@
 import streamlit as st
 import html
-from streamlit_app.utils.api_client import get, post, health_check
+import time
+
+try:
+    from streamlit_app.utils.api_client import get, post, health_check
+except ImportError:
+
+    def health_check() -> bool:
+        return False
+
+    def get(endpoint: str):
+        raise RuntimeError("api_client module not available")
+
+    def post(endpoint: str, data: dict = None):
+        raise RuntimeError("api_client module not available")
+
+
 from streamlit_app.components.icon import icon, icon_title, icon_caption
 from streamlit_app.components.metric_card import metric_row
 from streamlit_app.components.card import card, card_header
-import time
 
 # ── Backend connectivity check ─────────────────────────────
 _backend_ok = health_check()

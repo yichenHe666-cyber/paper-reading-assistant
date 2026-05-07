@@ -252,13 +252,13 @@ async def conduct_research(
 
                 if "429" in err_str or "rate" in err_str.lower():
                     wait = base_delay * (4 ** attempt)
-                    logger.warning(f"搜索限流 {retriever_name} (尝试 {attempt+1}/{max_retries})，{wait}s 后重试")
+                    logger.exception(f"搜索限流 {retriever_name} (尝试 {attempt+1}/{max_retries})，{wait}s 后重试")
                     await asyncio.sleep(wait)
                     continue
 
                 if "timeout" in err_str.lower() or "connection" in err_str.lower():
                     wait = base_delay * (2 ** attempt)
-                    logger.warning(f"搜索超时 {retriever_name} (尝试 {attempt+1}/{max_retries})，{wait}s 后重试")
+                    logger.exception(f"搜索超时 {retriever_name} (尝试 {attempt+1}/{max_retries})，{wait}s 后重试")
                     await asyncio.sleep(wait)
                     continue
 

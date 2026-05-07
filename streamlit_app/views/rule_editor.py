@@ -35,9 +35,9 @@ with tab_list:
     else:
         for r in rules:
             cat_colors = {"behavior": "info", "output": "primary", "safety": "danger", "domain": "warning", "custom": "default"}
-            cat_badge = badge(r.get("category", "custom"), variant=cat_colors.get(r.get("category", "custom"), "default"), size="xs")
-            source_badge = badge(r.get("source", "user"), variant="success" if r.get("source") == "builtin" else "default", size="xs")
-            enabled_badge = badge("启用" if r.get("enabled") else "禁用", variant="success" if r.get("enabled") else "danger", size="xs")
+            cat_badge = badge(r.get("category", "custom"), variant=cat_colors.get(r.get("category", "custom"), "default"))
+            source_badge = badge(r.get("source", "user"), variant="success" if r.get("source") == "builtin" else "default")
+            enabled_badge = badge("启用" if r.get("enabled") else "禁用", variant="success" if r.get("enabled") else "danger")
             card(
                 content=f"""
                 <div style="display:flex; justify-content:space-between; align-items:center;">

@@ -80,7 +80,7 @@ with col_b2:
             try:
                 result = post("/api/system/export")
                 if result.get("path"):
-                    st.success(f"导出成功！\n\n{icon('box', size='sm')} `{result['path']}`")
+                    st.success(f"导出成功！\n\n📦 `{result['path']}`")
                     st.info("包含：SQLite数据库 + Obsidian笔记 + Wiki知识库")
                 else:
                     st.error(f"导出失败: {result.get('error', '未知错误')}")

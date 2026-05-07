@@ -3,16 +3,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.session import engine, Base
 from app.database.init_db import init_db
+from app.config import get_settings
 from app.services.sqlite_log_handler import setup_logger
 from app.services.api_auth import APIKeyMiddleware
 from app.routes import topics, papers, reading, obsidian, system, wiki, recommend, research, skills, memory, chat, workspace, sandbox, rules, knowledge
 
 _logger = setup_logger("paper_reader")
 
+_startup_time = None
+
 app = FastAPI(
     title="核动力科研牛马",
     description="从 Papers We Love 抓取经典 CS 论文，核动力科研牛马辅助阅读，一键写入 Obsidian",
-    version="0.1.1",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -43,22 +46,25 @@ app.include_router(knowledge.router, prefix="/api/knowledge", tags=["知识库"]
 
 
 def _background_init():
+    import time
+    _start = time.time()
     try:
         from app.services.fts_manager import init_fts
         init_fts()
     except Exception:
-        pass
+        _logger.exception("后台初始化子任务失败")
     try:
         from app.services.backup import auto_backup_db
         auto_backup_db()
     except Exception:
-        pass
+        _logger.exception("后台初始化子任务失败")
     try:
         _auto_memory_enhancement()
-    except Exception as e:
-        _logger.warning("记忆增强自动任务异常: %s", e)
-    _logger.info("核动力科研牛马启动完成")
-    print("[READER] 核动力科研牛马 v0.2.0 启动完成 (含 AI 研究助手)")
+    except Exception:
+        _logger.exception("记忆增强自动任务异常")
+    elapsed = time.time() - _start
+    _logger.info("核动力科研牛马启动完成，耗时: %.1f 秒", elapsed)
+    print("[READER] 核动力科研牛马 v0.3.0 启动完成 (含 AI 研究助手)")
 
 
 def _auto_memory_enhancement():
@@ -78,8 +84,8 @@ def _auto_memory_enhancement():
     try:
         result = memory_vectorizer.backfill_embeddings(db)
         _logger.info("嵌入回填完成：处理 %d 条，失败 %d 条", result.get("processed", 0), result.get("failed", 0))
-    except Exception as e:
-        _logger.warning("嵌入回填异常: %s", e)
+    except Exception:
+        _logger.exception("嵌入回填异常")
     finally:
         db.close()
 
@@ -88,8 +94,8 @@ def _auto_memory_enhancement():
     try:
         result = memory_observer.run_consolidation_cycle(db)
         _logger.info("观察合并完成：合并 %d 个实体，失败 %d 个", result.get("consolidated", 0), result.get("failed", 0))
-    except Exception as e:
-        _logger.warning("观察合并异常: %s", e)
+    except Exception:
+        _logger.exception("观察合并异常")
     finally:
         db.close()
 
@@ -122,10 +128,10 @@ def _auto_memory_enhancement():
                         )
                         _logger.info("自动反思完成：实体 %s", entity_name)
                     time.sleep(2)
-                except Exception as e:
-                    _logger.warning("自动反思异常（实体 %s）: %s", entity_name, e)
-        except Exception as e:
-            _logger.warning("自动反思整体异常: %s", e)
+                except Exception:
+                    _logger.exception("自动反思异常（实体 %s）", entity_name)
+        except Exception:
+            _logger.exception("自动反思整体异常")
         finally:
             db.close()
     else:
@@ -136,14 +142,30 @@ def _auto_memory_enhancement():
 
 @app.on_event("startup")
 def on_startup():
+    import datetime
+    from app.config import get_settings
+    global _startup_time
+    settings = get_settings()
+    _logger.info("系统启动 — 时间: %s, 日志级别: %s, 数据库: %s",
+                 datetime.datetime.now().isoformat(), settings.log_level, settings.database_path)
     init_db()
+    _logger.info("数据库初始化完成: %s", get_settings().database_path)
     t = threading.Thread(target=_background_init, daemon=True)
     t.start()
+    _startup_time = datetime.datetime.now()
 
 
 @app.get("/")
 def root():
-    return {"app": "核动力科研牛马", "version": "0.2.0", "docs": "/docs", "features": ["论文精读", "AI研究助手"]}
+    return {"app": "核动力科研牛马", "version": "0.3.0", "docs": "/docs", "features": ["论文精读", "AI研究助手"]}
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    import datetime
+    now = datetime.datetime.now()
+    shutdown_msg = "系统正常关闭 — 时间: %s" % now.isoformat()
+    _logger.info(shutdown_msg)
 
 
 def get_logger():

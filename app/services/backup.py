@@ -1,7 +1,10 @@
 import shutil
 import zipfile
+import logging
 from pathlib import Path
 from datetime import datetime
+
+logger = logging.getLogger("paper_reader")
 
 
 DB_PATH = Path("data/reading_assistant.db")
@@ -22,6 +25,7 @@ def auto_backup_db():
     backup_file = BACKUP_DIR / f"reading_assistant_{today}.db"
     if not backup_file.exists():
         shutil.copy2(DB_PATH, backup_file)
+        logger.info("文件创建: %s", backup_file)
     all_backups = sorted(BACKUP_DIR.glob("reading_assistant_*.db"))
     for old in all_backups[:-7]:
         old.unlink()

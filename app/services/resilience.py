@@ -59,11 +59,13 @@ def safe_file_write(filepath, content: str, encoding: str = "utf-8"):
         with open(tmp_path, "w", encoding=encoding) as f:
             f.write(content)
         os.replace(tmp_path, filepath)
+        logger.debug("安全写入成功: %s", filepath)
     except PermissionError:
         import shutil
         shutil.copy2(tmp_path, filepath)
         os.remove(tmp_path)
     except Exception:
+        logger.exception("安全写入失败: %s", filepath)
         raise
     finally:
         if os.path.exists(tmp_path):

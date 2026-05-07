@@ -1,11 +1,14 @@
 import re
 import json
+import os
 import logging
 from pathlib import Path
 from datetime import date
 from app.config import get_settings
 from app.database.session import SessionLocal
 from app.services.snapshot_manager import snapshot_before_write
+
+logger = logging.getLogger("paper_reader")
 
 
 class ObsidianWriter:
@@ -36,8 +39,12 @@ class ObsidianWriter:
                     snapshot_before_write(db, paper.get("id"), str(filepath), existing_content)
                 finally:
                     db.close()
-            filepath.write_text(note_draft, encoding="utf-8")
-            logging.getLogger("paper_reader").info(f"[obsidian] Wrote academic note: {filepath}")
+            try:
+                filepath.write_text(note_draft, encoding="utf-8")
+                logger.info("文件写入: %s (大小: %s)", filepath, os.path.getsize(filepath) if os.path.exists(filepath) else "未知")
+            except Exception:
+                logger.error("文件写入失败: %s", filepath)
+                raise
             return str(filepath)
 
         if not note_draft.strip().startswith("---"):
@@ -99,8 +106,12 @@ related_papers: []
             finally:
                 db.close()
 
-        filepath.write_text(note_draft, encoding="utf-8")
-        logging.getLogger("paper_reader").info(f"[obsidian] Wrote paper note: {filepath}")
+        try:
+            filepath.write_text(note_draft, encoding="utf-8")
+            logger.info("文件写入: %s (大小: %s)", filepath, os.path.getsize(filepath) if os.path.exists(filepath) else "未知")
+        except Exception:
+            logger.error("文件写入失败: %s", filepath)
+            raise
         return str(filepath)
 
     def write_concept_card(self, concept: dict) -> str:
