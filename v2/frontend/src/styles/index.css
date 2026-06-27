@@ -1,0 +1,81 @@
+/* 全局样式入口。
+ *
+ * 痛点③修复要点：
+ *   - 显式 CJK 字体栈（tailwind.config.js 已注入，这里再设 body 兜底）；
+ *   - 字体渲染优化：-webkit-font-smoothing + text-rendering，避免小字号中文发虚；
+ *   - 中英文混排字体特征：font-feature-settings "pkna" 让中文标点不过宽。
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    /* 兜底：即便 Tailwind 未注入，html 也声明 CJK 字体栈 */
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
+      'Noto Sans CJK SC', 'Source Han Sans CN', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-brand-50 text-brand-900 antialiased;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  /* 代码块统一字体，避免中文 fallback 到非等宽字体 */
+  code, pre, kbd, samp {
+    font-family: 'JetBrains Mono', SFMono-Regular, Menlo, Consolas,
+      'Noto Sans Mono CJK SC', monospace;
+  }
+
+  /* react-markdown 渲染容器内的排版优化 */
+  .prose-chat {
+    @apply leading-relaxed;
+  }
+  .prose-chat p {
+    @apply my-2;
+  }
+  .prose-chat pre {
+    @apply my-3 overflow-x-auto rounded-lg bg-brand-900 p-3 text-sm text-brand-50;
+  }
+  .prose-chat code {
+    @apply rounded bg-brand-100 px-1 py-0.5 text-sm;
+  }
+  .prose-chat pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+  .prose-chat ul, .prose-chat ol {
+    @apply my-2 pl-6;
+  }
+  .prose-chat ul {
+    @apply list-disc;
+  }
+  .prose-chat ol {
+    @apply list-decimal;
+  }
+  .prose-chat li {
+    @apply my-1;
+  }
+  .prose-chat h1, .prose-chat h2, .prose-chat h3 {
+    @apply my-3 font-semibold;
+  }
+  .prose-chat h1 { @apply text-xl; }
+  .prose-chat h2 { @apply text-lg; }
+  .prose-chat h3 { @apply text-base; }
+  .prose-chat a {
+    @apply text-brand-500 underline hover:text-brand-600;
+  }
+  .prose-chat blockquote {
+    @apply my-2 border-l-4 border-brand-100 pl-3 text-brand-700;
+  }
+  .prose-chat table {
+    @apply my-3 border-collapse;
+  }
+  .prose-chat th, .prose-chat td {
+    @apply border border-brand-100 px-2 py-1;
+  }
+}
