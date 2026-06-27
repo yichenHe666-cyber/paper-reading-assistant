@@ -25,6 +25,16 @@
 //   POST  /skills                       创建/更新技能（M2）
 //   DELETE /skills/:slug                删除技能（M2）
 //   POST  /skills/:slug/evolve          查询技能自进化统计（M2）
+//   POST  /memory                       创建记忆（M4，代理 Rust core）
+//   GET   /memory/:id                   查询记忆（M4）
+//   DELETE /memory/:id                  删除记忆（M4）
+//   GET   /memory/search                关键字检索（M4）
+//   POST  /memory/search-vector         向量相似度检索（M4）
+//   POST  /memory/dream                 触发梦境整合（M4）
+//   GET   /memory/dream-diary           列出 Dream Diary（M4）
+//   GET   /memory/dream-diary/:id       查询单条 Dream Diary（M4）
+//   POST  /memory/decision              记录决策到账本（M4）
+//   GET   /memory/decisions             列出决策（M4）
 //
 // 设计要点：
 //   - gin ReleaseMode 避免日志噪音；测试用 TestMode（newTestServer）；
@@ -42,6 +52,7 @@ import (
 	"nuclear-ox-v2/backend/internal/agent"
 	"nuclear-ox-v2/backend/internal/config"
 	"nuclear-ox-v2/backend/internal/llm"
+	"nuclear-ox-v2/backend/internal/memory"
 	"nuclear-ox-v2/backend/internal/paper"
 )
 
@@ -54,6 +65,7 @@ type Server struct {
 	github  *paper.GitHubClient // GitHub 同步客户端
 	chat    *agent.ChatService  // 会话编排服务（M2）
 	evolver *agent.Evolver      // 自进化器（M2，供手动触发端点使用）
+	memory  *memory.Client      // Rust core 记忆/梦境客户端（M4）
 	router  *gin.Engine         // gin 路由引擎
 }
 
@@ -70,6 +82,9 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 		repo:   paper.NewRepository(db),
 		llm:    llm.New(cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIBase, cfg.LLM.APIKey, cfg.LLM.Timeout),
 		github: paper.NewGitHubClient(cfg.GitHub.Token),
+		// M4：Rust core HTTP 客户端（记忆/梦境/向量）。core 可能未启动，
+		// 此处不探测连接，由实际请求时的 502 错误暴露（懒连接）。
+		memory: memory.New(cfg.Core.BaseURL, cfg.Core.Timeout),
 	}
 	// 注入成本记录器：每次成功 LLM 调用写入 llm_calls 表
 	s.llm.SetRecorder(llm.NewDBRecorder(db))
@@ -127,6 +142,18 @@ func (s *Server) buildRouter() *gin.Engine {
 		api.POST("/skills", s.upsertSkill)
 		api.DELETE("/skills/:slug", s.deleteSkill)
 		api.POST("/skills/:slug/evolve", s.evolveSkill)
+
+		// --- M4：记忆 / 梦境 / 决策（代理 Rust core） ---
+		api.POST("/memory", s.createMemory)
+		api.GET("/memory/:id", s.getMemory)
+		api.DELETE("/memory/:id", s.deleteMemory)
+		api.GET("/memory/search", s.searchMemory)
+		api.POST("/memory/search-vector", s.searchVector)
+		api.POST("/memory/dream", s.triggerDream)
+		api.GET("/memory/dream-diary", s.listDreamDiary)
+		api.GET("/memory/dream-diary/:id", s.getDreamDiary)
+		api.POST("/memory/decision", s.addDecision)
+		api.GET("/memory/decisions", s.listDecisions)
 	}
 	return r
 }

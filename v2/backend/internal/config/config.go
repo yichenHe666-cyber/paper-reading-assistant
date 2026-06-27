@@ -31,6 +31,7 @@ type Config struct {
 	Server  ServerConfig  // HTTP 服务配置
 	LLM     LLMConfig     // LLM provider 配置
 	GitHub  GitHubConfig  // GitHub 数据源配置
+	Core    CoreConfig    // Rust core 服务配置（向量化/记忆/梦境，spec §5）
 }
 
 // ServerConfig 描述 HTTP 监听参数。
@@ -58,6 +59,13 @@ type GitHubConfig struct {
 	DefaultRepo string // 默认同步仓库，格式 "owner/repo"，如 papers-we-love/papers-we-love
 }
 
+// CoreConfig 描述 Rust core 服务（向量化/记忆引擎/梦境整合）的连接配置。
+// spec §2.1：Go 后端通过 localhost HTTP 调用 Rust core，core 不暴露公网端口。
+type CoreConfig struct {
+	BaseURL string  // Rust core HTTP 基址，默认 http://127.0.0.1:8788
+	Timeout float64 // 请求超时（秒），梦境整合较慢，默认 60
+}
+
 // Load 从环境变量加载配置，绝对化路径并做启动校验。
 // 失败时返回错误，由调用方 fail-fast（而非带到运行时才 401）。
 func Load() (*Config, error) {
@@ -82,6 +90,10 @@ func Load() (*Config, error) {
 		GitHub: GitHubConfig{
 			Token:       getEnv("GITHUB_TOKEN", ""),
 			DefaultRepo: getEnv("DEFAULT_GITHUB_REPO", "papers-we-love/papers-we-love"),
+		},
+		Core: CoreConfig{
+			BaseURL: getEnv("CORE_BASE_URL", "http://127.0.0.1:8788"),
+			Timeout: getEnvFloat("CORE_TIMEOUT", 60.0),
 		},
 	}
 	// 路径绝对化（痛点②修复核心）

@@ -95,6 +95,9 @@ pub struct DreamResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DreamDiaryEntry {
     pub id: String,
+    /// 同一次梦境的关联 id（light/rem/deep/done 四阶段共享）。
+    /// 前端可据此聚合一次梦境的完整过程日志。
+    pub run_id: String,
     pub started_at: String,
     pub finished_at: String,
     pub stage: String,
@@ -118,17 +121,21 @@ impl Dreamer {
     }
 
     /// 执行一次完整梦境（Light → REM → Deep）。
+    ///
+    /// 每阶段独立写一条 dream_diary 行（id 唯一，run_id 共享），
+    /// 最终 done 行的 id 作为本次梦境的对外 diary_id 返回。
+    /// list_diary 默认只返回 stage='done' 的行用于展示，中间阶段可通过 run_id 关联查询。
     pub async fn dream(&self) -> Result<DreamResult> {
-        let diary_id = Uuid::new_v4().to_string();
+        let run_id = Uuid::new_v4().to_string();
         let started_at = now_iso();
 
         // 起始日志
-        self.insert_diary_stage(&diary_id, &started_at, "light", 0, 0, 0, "梦境开始", "")?;
+        self.insert_diary_stage(&run_id, &started_at, "light", 0, 0, 0, "梦境开始", "")?;
 
         // 1. Light Sleep：去重 + 强化信号
         let (candidates, light_summary) = self.light_sleep().await?;
         self.insert_diary_stage(
-            &diary_id,
+            &run_id,
             &started_at,
             "rem",
             candidates.len() as i64,
@@ -141,7 +148,7 @@ impl Dreamer {
         // 2. REM Sleep：词频分析 + 主题提取（增强 candidate 频率）
         let (candidates, rem_summary) = self.rem_sleep(candidates).await?;
         self.insert_diary_stage(
-            &diary_id,
+            &run_id,
             &started_at,
             "deep",
             candidates.len() as i64,
@@ -165,9 +172,9 @@ impl Dreamer {
         );
         let details_json = serde_json::to_string(&breakdowns).unwrap_or_default();
 
-        // 完成日志
-        self.insert_diary_stage(
-            &diary_id,
+        // 完成日志（done 行的 id 作为对外 diary_id）
+        let diary_id = self.insert_diary_stage(
+            &run_id,
             &started_at,
             "done",
             breakdowns.len() as i64,
@@ -176,7 +183,7 @@ impl Dreamer {
             &summary,
             &details_json,
         )?;
-        // 更新 finished_at
+        // 更新 done 行的 finished_at
         self.db.with_conn(|conn| {
             conn.execute(
                 "UPDATE dream_diary SET finished_at=? WHERE id=?",
@@ -196,13 +203,13 @@ impl Dreamer {
         })
     }
 
-    /// 列出最近的 Dream Diary 条目（按 started_at 降序）。
+    /// 列出最近的 Dream Diary 条目（仅 stage='done'，按 rowid 降序）。
     pub fn list_diary(&self, limit: i64) -> Result<Vec<DreamDiaryEntry>> {
         let sql = if limit > 0 {
-            "SELECT id, started_at, finished_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json
+            "SELECT id, run_id, started_at, finished_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json
              FROM dream_diary WHERE stage='done' ORDER BY rowid DESC LIMIT ?"
         } else {
-            "SELECT id, started_at, finished_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json
+            "SELECT id, run_id, started_at, finished_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json
              FROM dream_diary WHERE stage='done' ORDER BY rowid DESC"
         };
         self.db.with_conn(|conn| {
@@ -220,7 +227,7 @@ impl Dreamer {
     pub fn get_diary(&self, id: &str) -> Result<Option<DreamDiaryEntry>> {
         Ok(self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, finished_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json
+                "SELECT id, run_id, started_at, finished_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json
                  FROM dream_diary WHERE id = ?",
             )?;
             let mut rows = stmt.query(params![id])?;
@@ -247,12 +254,13 @@ impl Dreamer {
             }
             let mut freq = 1usize;
             let mut reinforcement = 0.0f64;
-            let set_i = tokenize(&m.content);
+            // Jaccard 需集合语义，tokenize 返回 Vec，这里转 HashSet
+            let set_i: HashSet<String> = tokenize(&m.content).into_iter().collect();
             for (j, other) in episodic.iter().enumerate() {
                 if j <= i || merged.contains(&j) {
                     continue;
                 }
-                let set_j = tokenize(&other.content);
+                let set_j: HashSet<String> = tokenize(&other.content).into_iter().collect();
                 let sim = jaccard(&set_i, &set_j);
                 if sim >= JACCARD_THRESHOLD {
                     freq += 1;
@@ -474,9 +482,11 @@ impl Dreamer {
 
     // --- Dream Diary 持久化 ---
 
+    /// 写入一条 dream_diary 阶段日志。内部生成唯一 id，返回该 id。
+    /// 同一次梦境的 light/rem/deep/done 四阶段共享 run_id。
     fn insert_diary_stage(
         &self,
-        id: &str,
+        run_id: &str,
         started_at: &str,
         stage: &str,
         reviewed: i64,
@@ -484,15 +494,16 @@ impl Dreamer {
         decayed: i64,
         summary: &str,
         details: &str,
-    ) -> Result<()> {
+    ) -> Result<String> {
+        let id = Uuid::new_v4().to_string();
         self.db.with_conn(|conn| {
             conn.execute(
-                "INSERT INTO dream_diary (id, started_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                params![id, started_at, stage, reviewed, promoted, decayed, summary, details],
+                "INSERT INTO dream_diary (id, run_id, started_at, stage, reviewed_count, promoted_count, decayed_count, summary, details_json)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![id, run_id, started_at, stage, reviewed, promoted, decayed, summary, details],
             )
         })?;
-        Ok(())
+        Ok(id)
     }
 }
 
@@ -512,11 +523,9 @@ fn tokenize(s: &str) -> Vec<String> {
     for ch in s.chars() {
         if ch.is_alphanumeric() {
             current.push(ch.to_ascii_lowercase());
-        } else {
-            if !current.is_empty() {
-                push_token(&mut out, &current);
-                current.clear();
-            }
+        } else if !current.is_empty() {
+            push_token(&mut out, &current);
+            current.clear();
             // CJK 字符单独成 token（is_alphanumeric 对 CJK 返回 true，故走上面分支）
         }
     }
@@ -576,20 +585,22 @@ fn compute_recency(created_at: &str, now: chrono::DateTime<chrono::Utc>, half_li
 fn row_to_diary(row: &rusqlite::Row) -> rusqlite::Result<DreamDiaryEntry> {
     Ok(DreamDiaryEntry {
         id: row.get(0)?,
-        started_at: row.get(1)?,
-        finished_at: row.get(2).unwrap_or_default(),
-        stage: row.get(3)?,
-        reviewed_count: row.get(4)?,
-        promoted_count: row.get(5)?,
-        decayed_count: row.get(6)?,
-        summary: row.get(7)?,
-        details_json: row.get(8).unwrap_or_default(),
+        run_id: row.get(1)?,
+        started_at: row.get(2)?,
+        finished_at: row.get(3).unwrap_or_default(),
+        stage: row.get(4)?,
+        reviewed_count: row.get(5)?,
+        promoted_count: row.get(6)?,
+        decayed_count: row.get(7)?,
+        summary: row.get(8)?,
+        details_json: row.get(9).unwrap_or_default(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::CreateMemoryRequest;
     use crate::vector::EmbeddingClient;
 
     fn setup() -> (Arc<Db>, Arc<MemoryEngine>, Arc<Config>, Dreamer) {
@@ -690,7 +701,14 @@ mod tests {
         let result = dreamer.dream().await.unwrap();
         assert_eq!(result.reviewed_count, 0);
         assert_eq!(result.promoted_count, 0);
-        assert!(result.summary.contains("无近期情景记忆") || result.summary.contains("无候选"));
+        // 空记忆时 summary 应体现"0 候选评分"或阶段日志的"无近期情景记忆/无候选"
+        assert!(
+            result.summary.contains("0 候选评分")
+                || result.summary.contains("无近期情景记忆")
+                || result.summary.contains("无候选"),
+            "空记忆 summary 应体现无候选，实际：{}",
+            result.summary
+        );
     }
 
     #[tokio::test]

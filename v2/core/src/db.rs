@@ -45,6 +45,7 @@ impl Db {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS dream_diary (
                 id              TEXT PRIMARY KEY,
+                run_id          TEXT NOT NULL DEFAULT '', -- 同一次梦境的关联 id（light/rem/deep/done 共用）
                 started_at      TEXT NOT NULL,
                 finished_at     TEXT,
                 stage           TEXT NOT NULL,         -- light / rem / deep / done
@@ -54,6 +55,7 @@ impl Db {
                 summary         TEXT DEFAULT '',       -- 本次梦境摘要
                 details_json    TEXT DEFAULT ''        -- 详细日志 JSON（候选列表/评分/原因）
             );
+            CREATE INDEX IF NOT EXISTS idx_dream_diary_run_id ON dream_diary(run_id);
             CREATE TABLE IF NOT EXISTS memory_vectors (
                 id              TEXT PRIMARY KEY,       -- 与 memories.embedding_id 一致
                 memory_id       TEXT NOT NULL,          -- 关联 memories.id

@@ -228,7 +228,8 @@ impl MemoryEngine {
                     Ok((id, mid, v))
                 })?
                 .collect();
-            Ok(rows?)
+            // 显式标注错误类型，避免 anyhow::Error 的 From 推断歧义
+            Ok::<_, rusqlite::Error>(rows?)
         })?;
 
         let mut scored: Vec<SimilarMemory> = Vec::new();
