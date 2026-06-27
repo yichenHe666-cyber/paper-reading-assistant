@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+import html
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -529,7 +530,7 @@ with col_main:
             if role == "user":
                 st.markdown(f"""
                 <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-                    <div class="doubao-message-bubble user">{content}</div>
+                    <div class="doubao-message-bubble user">{html.escape(content)}</div>
                 </div>
                 """, unsafe_allow_html=True)
             elif role == "assistant":
@@ -540,30 +541,30 @@ with col_main:
                         <span class="doubao-reasoning-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
                             💭 思考过程 ▼
                         </span>
-                        <div class="doubao-reasoning-box" style="display:none;">{reasoning_content}</div>
+                        <div class="doubao-reasoning-box" style="display:none;">{html.escape(reasoning_content)}</div>
                     </div>
                     """
                 model_badge = f'<div class="doubao-model-badge">{model_used}</div>' if model_used else ''
                 st.markdown(f"""
                 <div style="display:flex;justify-content:flex-start;margin-bottom:16px;">
                     <div class="doubao-message-avatar">AI</div>
-                    <div>{reasoning_html}<div class="doubao-message-bubble assistant">{content}</div>{model_badge}</div>
+                    <div>{reasoning_html}<div class="doubao-message-bubble assistant">{html.escape(content)}</div>{model_badge}</div>
                 </div>
                 """, unsafe_allow_html=True)
             elif role == "system":
-                st.markdown(f'<div class="doubao-system-msg">{content}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="doubao-system-msg">{html.escape(content)}</div>', unsafe_allow_html=True)
             elif role == "function_call":
                 st.markdown(f"""
                 <div class="doubao-function-box">
                     <div class="doubao-function-title">🔧 技能调用</div>
-                    <div style="color:#94a3b8;font-size:12px;white-space:pre-wrap;">{content[:500]}</div>
+                    <div style="color:#94a3b8;font-size:12px;white-space:pre-wrap;">{html.escape(content[:500])}</div>
                 </div>
                 """, unsafe_allow_html=True)
             elif role == "function_result":
                 st.markdown(f"""
                 <div class="doubao-function-box">
                     <div class="doubao-function-title">📋 技能结果</div>
-                    <div style="color:#94a3b8;font-size:12px;white-space:pre-wrap;">{content[:500]}</div>
+                    <div style="color:#94a3b8;font-size:12px;white-space:pre-wrap;">{html.escape(content[:500])}</div>
                 </div>
                 """, unsafe_allow_html=True)
 

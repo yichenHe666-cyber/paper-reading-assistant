@@ -63,11 +63,14 @@ def list_sessions(
         try:
             from sqlalchemy import text
             fts_result = db.execute(
-                text("SELECT DISTINCT session_id FROM chat_messages_fts WHERE chat_messages_fts MATCH :q"),
+                text("SELECT DISTINCT session_id FROM chat_messages_fts WHERE content MATCH :q"),
                 {"q": q},
             ).fetchall()
             matching_ids = [row[0] for row in fts_result]
-            query = query.filter(ChatSession.id.in_(matching_ids))
+            if matching_ids:
+                query = query.filter(ChatSession.id.in_(matching_ids))
+            else:
+                query = query.filter(ChatSession.title.contains(q))
         except Exception:
             query = query.filter(ChatSession.title.contains(q))
     total = query.count()
@@ -125,8 +128,9 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
 
 @router.post("/sessions/{session_id}/messages")
 def send_message(session_id: int, data: dict, db: Session = Depends(get_db)):
-    content = data.get("content", "")
-    if not content.strip():
+    content = data.get("content") or ""
+    content = content.strip()
+    if not content:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
     result = chat_engine.send_message(db, session_id, content, stream=False)
     if "error" in result:
@@ -136,8 +140,9 @@ def send_message(session_id: int, data: dict, db: Session = Depends(get_db)):
 
 @router.post("/sessions/{session_id}/messages/stream")
 def send_message_stream(session_id: int, data: dict, db: Session = Depends(get_db)):
-    content = data.get("content", "")
-    if not content.strip():
+    content = data.get("content") or ""
+    content = content.strip()
+    if not content:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
 
     def event_generator():

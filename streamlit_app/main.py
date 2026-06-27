@@ -60,6 +60,7 @@ agent_chat = st.Page("views/agent_chat.py",      title="智能体对话",   icon
 workspace = st.Page("views/workspace_manager.py", title="工作空间",     icon="🗂️")
 browser   = st.Page("views/topic_browser.py",     title="主题浏览",     icon="📂")
 workbench = st.Page("views/reading_workbench.py", title="阅读工作台",   icon="📖")
+pdf_reader = st.Page("views/pdf_reader.py",       title="PDF 阅读器",   icon="📄")
 memory    = st.Page("views/memory_panel.py",     title="记忆面板",     icon="🧠")
 knowledge = st.Page("views/knowledge_base.py",   title="知识库",       icon="🗄️")
 research  = st.Page("views/research_assistant.py",title="AI 研究助手",  icon="🔬")
@@ -78,7 +79,7 @@ stats     = st.Page("views/stats.py",             title="统计",         icon="
 # ── Navigation ─────────────────────────────────────────────
 pg = st.navigation(
     {
-        "导航": [home, agent_chat, workspace, browser, workbench, memory, knowledge, research, obsidian, dashboard, bill, oplog, history, graph, recommend, skills, rules, settings, stats],
+        "导航": [home, agent_chat, workspace, browser, workbench, pdf_reader, memory, knowledge, research, obsidian, dashboard, bill, oplog, history, graph, recommend, skills, rules, settings, stats],
     },
     expanded=True,
 )

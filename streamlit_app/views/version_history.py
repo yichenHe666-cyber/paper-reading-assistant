@@ -70,7 +70,10 @@ else:
                     )
                 with col2:
                     if st.button("回滚到此版本", key=f"rollback_{s['id']}", use_container_width=True):
-                        result = post("/api/obsidian/rollback", {"snapshot_id": s["id"], "paper_id": paper_id})
+                        try:
+                            result = post("/api/obsidian/rollback", {"snapshot_id": s["id"], "paper_id": paper_id})
+                        except Exception as e:
+                            result = {"error": str(e)}
                         if result.get("status") == "ok":
                             st.success("回滚成功")
                             st.rerun()

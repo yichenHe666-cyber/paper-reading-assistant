@@ -130,94 +130,99 @@ def handle_request(request: dict) -> dict:
     return {"error": f"Unknown method: {method}"}
 
 
+def _build_api_base() -> str:
+    from app.config import get_settings
+    return f"http://127.0.0.1:{get_settings().api_port}"
+
+
+def _auth_headers() -> dict:
+    from app.config import get_settings
+    headers = {}
+    key = get_settings().api_key
+    if key:
+        headers["X-API-Key"] = key
+    return headers
+
+
 def _call_tool(tool_name: str, args: dict):
-    from app.database.session import SessionLocal
-    db = SessionLocal()
-    try:
-        if tool_name == "list_topics":
-            topics = __import__("app.services.github_fetcher", fromlist=["get_topics"]).get_topics()
-            return topics
+    import httpx
+    base = _build_api_base()
+    headers = _auth_headers()
 
-        elif tool_name == "search_papers":
-            import httpx
-            q = args.get("query", "")
-            limit = args.get("limit", 10)
-            topic = args.get("topic")
-            params = {"q": q, "limit": limit}
-            resp = httpx.get("http://127.0.0.1:8000/api/papers/search", params=params, timeout=30)
-            data = resp.json()
-            results = data.get("results", [])
-            if topic:
-                results = [r for r in results if r.get("topic_id") == topic]
-            return results[:limit]
+    if tool_name == "list_topics":
+        topics = __import__("app.services.github_fetcher", fromlist=["get_topics"]).get_topics()
+        return topics
 
-        elif tool_name == "get_paper_detail":
-            import httpx
-            resp = httpx.get(f"http://127.0.0.1:8000/api/papers/{args['paper_id']}", timeout=30)
-            return resp.json()
+    elif tool_name == "search_papers":
+        q = args.get("query", "")
+        limit = args.get("limit", 10)
+        topic = args.get("topic")
+        params = {"q": q, "limit": limit}
+        resp = httpx.get(f"{base}/api/papers/search", params=params, headers=headers, timeout=30)
+        data = resp.json()
+        results = data.get("results", [])
+        if topic:
+            results = [r for r in results if r.get("topic_id") == topic]
+        return results[:limit]
 
-        elif tool_name == "generate_navigator":
-            import httpx
-            resp = httpx.post("http://127.0.0.1:8000/api/reading/navigator",
-                             json={"paper_id": args["paper_id"]}, timeout=120)
-            return resp.json()
+    elif tool_name == "get_paper_detail":
+        resp = httpx.get(f"{base}/api/papers/{args['paper_id']}", headers=headers, timeout=30)
+        return resp.json()
 
-        elif tool_name == "generate_note_draft":
-            import httpx
-            paper = httpx.get(f"http://127.0.0.1:8000/api/papers/{args['paper_id']}", timeout=30).json()
-            nav = httpx.post("http://127.0.0.1:8000/api/reading/navigator",
-                           json={"paper_id": args["paper_id"]}, timeout=120).json()
-            resp = httpx.post("http://127.0.0.1:8000/api/reading/note-draft",
-                            json={"paper_id": args["paper_id"], "navigator": nav.get("navigator", {})}, timeout=120)
-            return resp.json()
+    elif tool_name == "generate_navigator":
+        resp = httpx.post(f"{base}/api/reading/navigator",
+                         json={"paper_id": args["paper_id"]}, headers=headers, timeout=120)
+        return resp.json()
 
-        elif tool_name == "generate_concept_cards":
-            import httpx
-            nav = httpx.post("http://127.0.0.1:8000/api/reading/navigator",
-                           json={"paper_id": args["paper_id"]}, timeout=120).json()
-            resp = httpx.post("http://127.0.0.1:8000/api/reading/concept-cards",
-                            json={"paper_id": args["paper_id"], "navigator": nav.get("navigator", {})}, timeout=120)
-            return resp.json()
+    elif tool_name == "generate_note_draft":
+        paper = httpx.get(f"{base}/api/papers/{args['paper_id']}", headers=headers, timeout=30).json()
+        nav = httpx.post(f"{base}/api/reading/navigator",
+                       json={"paper_id": args["paper_id"]}, headers=headers, timeout=120).json()
+        resp = httpx.post(f"{base}/api/reading/note-draft",
+                        json={"paper_id": args["paper_id"], "navigator": nav.get("navigator", {})},
+                        headers=headers, timeout=120)
+        return resp.json()
 
-        elif tool_name == "generate_vocabulary":
-            import httpx
-            resp = httpx.post("http://127.0.0.1:8000/api/reading/vocabulary",
-                            json={"paper_id": args["paper_id"]}, timeout=120)
-            return resp.json()
+    elif tool_name == "generate_concept_cards":
+        nav = httpx.post(f"{base}/api/reading/navigator",
+                       json={"paper_id": args["paper_id"]}, headers=headers, timeout=120).json()
+        resp = httpx.post(f"{base}/api/reading/concept-cards",
+                        json={"paper_id": args["paper_id"], "navigator": nav.get("navigator", {})},
+                        headers=headers, timeout=120)
+        return resp.json()
 
-        elif tool_name == "write_to_obsidian":
-            import httpx
-            oneclick = httpx.post("http://127.0.0.1:8000/api/reading/one-click",
-                                json={"paper_id": args["paper_id"]}, timeout=180).json()
-            if oneclick.get("error"):
-                return oneclick
-            resp = httpx.post("http://127.0.0.1:8000/api/obsidian/write-all", json={
-                "paper_id": args["paper_id"],
-                "note_draft": oneclick.get("note_draft", ""),
-                "concept_cards": oneclick.get("concept_cards", []),
-                "vocabulary_md": oneclick.get("vocabulary_md", ""),
-            }, timeout=30)
-            return resp.json()
+    elif tool_name == "generate_vocabulary":
+        resp = httpx.post(f"{base}/api/reading/vocabulary",
+                        json={"paper_id": args["paper_id"]}, headers=headers, timeout=120)
+        return resp.json()
 
-        elif tool_name == "scan_obsidian_vault":
-            import httpx
-            resp = httpx.post("http://127.0.0.1:8000/api/obsidian/scan-vault", timeout=30)
-            return resp.json()
+    elif tool_name == "write_to_obsidian":
+        oneclick = httpx.post(f"{base}/api/reading/one-click",
+                            json={"paper_id": args["paper_id"]}, headers=headers, timeout=180).json()
+        if oneclick.get("error"):
+            return oneclick
+        resp = httpx.post(f"{base}/api/obsidian/write-all", json={
+            "paper_id": args["paper_id"],
+            "note_draft": oneclick.get("note_draft", ""),
+            "concept_cards": oneclick.get("concept_cards", []),
+            "vocabulary_md": oneclick.get("vocabulary_md", ""),
+        }, headers=headers, timeout=30)
+        return resp.json()
 
-        elif tool_name == "get_reading_stats":
-            import httpx
-            resp = httpx.get("http://127.0.0.1:8000/api/system/stats", timeout=30)
-            return resp.json()
+    elif tool_name == "scan_obsidian_vault":
+        resp = httpx.post(f"{base}/api/obsidian/scan-vault", headers=headers, timeout=30)
+        return resp.json()
 
-        elif tool_name == "get_llm_cost_today":
-            import httpx
-            resp = httpx.get("http://127.0.0.1:8000/api/system/llm-cost", timeout=30)
-            return resp.json()
+    elif tool_name == "get_reading_stats":
+        resp = httpx.get(f"{base}/api/system/stats", headers=headers, timeout=30)
+        return resp.json()
 
-        else:
-            return {"error": f"Unknown tool: {tool_name}"}
-    finally:
-        db.close()
+    elif tool_name == "get_llm_cost_today":
+        resp = httpx.get(f"{base}/api/system/llm-cost", headers=headers, timeout=30)
+        return resp.json()
+
+    else:
+        return {"error": f"Unknown tool: {tool_name}"}
 
 
 def main():

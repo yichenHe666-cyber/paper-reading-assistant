@@ -175,7 +175,12 @@ def _try_arxiv_search(title: str) -> dict | None:
             entry_title = entry.find("atom:title", ns)
             if entry_title is None:
                 continue
-            entry_title_text = entry_title.text.strip().lower().replace("\n", " ")
+            title_text = entry_title.text
+            if not title_text:
+                continue
+            entry_title_text = title_text.strip().lower().replace("\n", " ")
+            if not entry_title_text:
+                continue
             if _title_similarity(title.lower(), entry_title_text) < 0.4:
                 continue
 

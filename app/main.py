@@ -1,4 +1,5 @@
 import threading
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.session import engine, Base
@@ -12,16 +13,41 @@ _logger = setup_logger("paper_reader")
 
 _startup_time = None
 
+# 允许的 CORS 来源。当包含通配 "*" 时，allow_credentials 必须为 False（CORS 规范要求）。
+ALLOWED_ORIGINS = ["*"]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── startup ──
+    import datetime
+    from app.config import get_settings
+    global _startup_time
+    settings = get_settings()
+    _logger.info("系统启动 — 时间: %s, 日志级别: %s, 数据库: %s",
+                 datetime.datetime.now().isoformat(), settings.log_level, settings.database_path)
+    init_db()
+    _logger.info("数据库初始化完成: %s", get_settings().database_path)
+    t = threading.Thread(target=_background_init, daemon=True)
+    t.start()
+    _startup_time = datetime.datetime.now()
+    yield
+    # ── shutdown ──
+    now = datetime.datetime.now()
+    _logger.info("系统正常关闭 — 时间: %s", now.isoformat())
+
+
 app = FastAPI(
     title="核动力科研牛马",
     description="从 Papers We Love 抓取经典 CS 论文，核动力科研牛马辅助阅读，一键写入 Obsidian",
     version="0.3.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials="*" not in ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -140,32 +166,9 @@ def _auto_memory_enhancement():
     _logger.info("自动记忆增强全部完成")
 
 
-@app.on_event("startup")
-def on_startup():
-    import datetime
-    from app.config import get_settings
-    global _startup_time
-    settings = get_settings()
-    _logger.info("系统启动 — 时间: %s, 日志级别: %s, 数据库: %s",
-                 datetime.datetime.now().isoformat(), settings.log_level, settings.database_path)
-    init_db()
-    _logger.info("数据库初始化完成: %s", get_settings().database_path)
-    t = threading.Thread(target=_background_init, daemon=True)
-    t.start()
-    _startup_time = datetime.datetime.now()
-
-
 @app.get("/")
 def root():
     return {"app": "核动力科研牛马", "version": "0.3.0", "docs": "/docs", "features": ["论文精读", "AI研究助手"]}
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    import datetime
-    now = datetime.datetime.now()
-    shutdown_msg = "系统正常关闭 — 时间: %s" % now.isoformat()
-    _logger.info(shutdown_msg)
 
 
 def get_logger():

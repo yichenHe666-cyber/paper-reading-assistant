@@ -179,11 +179,13 @@ class MemoryVectorizer:
             texts = [m.content for m in batch]
             embeddings = self.embed_texts_batch(texts)
 
+            batch_processed = 0
             for memory, embedding in zip(batch, embeddings):
                 if embedding is not None:
                     memory.embedding = self._encode_embedding(embedding)
                     memory.embedding_model = self._embedding_model if self._provider == "ollama" else self._openai_model
                     processed += 1
+                    batch_processed += 1
                 else:
                     failed += 1
 
@@ -192,8 +194,9 @@ class MemoryVectorizer:
             except Exception as e:
                 db.rollback()
                 logger.warning("Failed to commit embedding batch: %s", e)
-                failed += len(batch) - processed
-                processed = 0
+                # Only the successes within THIS batch are lost on commit failure.
+                failed += batch_processed
+                processed -= batch_processed
 
         return {"processed": processed, "failed": failed}
 

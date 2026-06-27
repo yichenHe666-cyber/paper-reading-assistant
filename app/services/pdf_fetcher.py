@@ -2,8 +2,9 @@ import re
 import httpx
 from pathlib import Path
 from datetime import datetime
+from app.config import get_settings
 
-RAW_DIR = Path(r"C:\Users\Public\Documents\wiki-knowledge\raw\papers")
+RAW_DIR = Path(get_settings().knowledge_base_path) / "raw" / "papers"
 
 
 def fix_arxiv_url(pdf_url: str) -> str:

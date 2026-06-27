@@ -1,6 +1,7 @@
 """Card component for consistent content containers."""
 
 import re
+import textwrap
 from typing import Optional
 import streamlit as st
 
@@ -9,9 +10,6 @@ def _clean_html(raw: str) -> str:
     raw = textwrap.dedent(raw).strip()
     raw = re.sub(r">\s+<", "><", raw)
     return raw
-
-
-import textwrap
 
 
 def card(

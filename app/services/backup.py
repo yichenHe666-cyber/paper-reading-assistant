@@ -3,18 +3,21 @@ import zipfile
 import logging
 from pathlib import Path
 from datetime import datetime
+from app.config import get_settings
 
 logger = logging.getLogger("paper_reader")
 
 
-DB_PATH = Path("data/reading_assistant.db")
+_settings = get_settings()
+DB_PATH = Path(_settings.database_path)
 BACKUP_DIR = Path("data/backups")
+_vault_root = Path(_settings.obsidian_vault_path) if _settings.obsidian_vault_path else Path(_settings.knowledge_base_path).parent
 OBSIDIAN_PATHS = {
-    "01-论文精读": Path(r"C:\Users\Public\Documents\01-论文精读"),
-    "02-概念卡片": Path(r"C:\Users\Public\Documents\02-概念卡片"),
-    "03-专业词汇": Path(r"C:\Users\Public\Documents\03-专业词汇"),
+    "01-论文精读": _vault_root / "01-论文精读",
+    "02-概念卡片": _vault_root / "02-概念卡片",
+    "03-专业词汇": _vault_root / "03-专业词汇",
 }
-WIKI_PATH = Path(r"C:\Users\Public\Documents\wiki-knowledge")
+WIKI_PATH = Path(_settings.knowledge_base_path)
 
 
 def auto_backup_db():
@@ -51,5 +54,4 @@ def export_all_to_zip() -> str:
             for f in WIKI_PATH.rglob("*.md"):
                 zf.write(f, f"wiki/{f.relative_to(WIKI_PATH)}")
 
-    size_mb = round(zip_path.stat().st_size / 1024 / 1024, 1)
     return str(zip_path.resolve())

@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database.session import get_db
@@ -75,7 +75,7 @@ def search_papers(q: str, limit: int = 20, db: Session = Depends(get_db)):
 def get_paper(paper_id: str, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
     topic = db.query(Topic).filter(Topic.id == paper.topic_id).first()
     return {
         "id": paper.id,
@@ -107,7 +107,7 @@ def get_paper(paper_id: str, db: Session = Depends(get_db)):
 def update_paper(paper_id: str, updates: dict, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
     old_read_status = paper.read_status
     for key in ["read_status", "rating", "difficulty", "last_read", "tags", "obsidian_path"]:
         if key in updates:
@@ -163,7 +163,7 @@ def update_paper(paper_id: str, updates: dict, db: Session = Depends(get_db)):
 def toggle_favorite(paper_id: str, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
     if paper.read_status == "已读":
         paper.read_status = "重读"
     else:

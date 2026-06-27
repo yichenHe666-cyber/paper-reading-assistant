@@ -61,29 +61,29 @@ def _init_chat_fts():
     with engine.begin() as conn:
         conn.execute(text(
             "CREATE VIRTUAL TABLE IF NOT EXISTS chat_messages_fts "
-            "USING fts5(content)"
+            "USING fts5(session_id UNINDEXED, content)"
         ))
         conn.execute(text(
             "CREATE TRIGGER IF NOT EXISTS chat_messages_fts_insert "
             "AFTER INSERT ON chat_messages BEGIN "
-            "INSERT INTO chat_messages_fts(rowid, content) "
-            "VALUES (NEW.id, NEW.content); "
+            "INSERT INTO chat_messages_fts(rowid, session_id, content) "
+            "VALUES (NEW.id, NEW.session_id, NEW.content); "
             "END"
         ))
         conn.execute(text(
             "CREATE TRIGGER IF NOT EXISTS chat_messages_fts_update "
             "AFTER UPDATE ON chat_messages BEGIN "
-            "INSERT INTO chat_messages_fts(chat_messages_fts, rowid, content) "
-            "VALUES ('delete', OLD.id, OLD.content); "
-            "INSERT INTO chat_messages_fts(rowid, content) "
-            "VALUES (NEW.id, NEW.content); "
+            "INSERT INTO chat_messages_fts(chat_messages_fts, rowid, session_id, content) "
+            "VALUES ('delete', OLD.id, OLD.session_id, OLD.content); "
+            "INSERT INTO chat_messages_fts(rowid, session_id, content) "
+            "VALUES (NEW.id, NEW.session_id, NEW.content); "
             "END"
         ))
         conn.execute(text(
             "CREATE TRIGGER IF NOT EXISTS chat_messages_fts_delete "
             "AFTER DELETE ON chat_messages BEGIN "
-            "INSERT INTO chat_messages_fts(chat_messages_fts, rowid, content) "
-            "VALUES ('delete', OLD.id, OLD.content); "
+            "INSERT INTO chat_messages_fts(chat_messages_fts, rowid, session_id, content) "
+            "VALUES ('delete', OLD.id, OLD.session_id, OLD.content); "
             "END"
         ))
 

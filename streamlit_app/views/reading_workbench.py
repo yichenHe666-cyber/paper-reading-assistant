@@ -69,6 +69,9 @@ with col_pdf:
         is_local_upload = pdf_url.startswith("local://uploaded/")
         if st.button("👁️ 在线浏览 PDF", key="view_pdf_inline", use_container_width=True, type="primary"):
             st.session_state.show_pdf_viewer = not st.session_state.get("show_pdf_viewer", False)
+        if st.button("📄 在 PDF 阅读器中打开", key="open_pdf_reader", use_container_width=True):
+            st.session_state.selected_paper_id = paper_id
+            st.switch_page("views/pdf_reader.py")
         if is_local_upload:
             st.button("📤 本地已上传", disabled=True, use_container_width=True)
         elif pdf_url.startswith("https://github.com/papers-we-love/papers-we-love/blob/master/"):
@@ -358,7 +361,7 @@ if len(tab_objects) > 1:
 
 # ── TAB: 形式化拆解 ──
 form_tab_idx = 2 if reading_round in ("R2", "R3") else None
-if form_tab_idx and form_tab_idx < len(tab_objects):
+if form_tab_idx is not None and form_tab_idx < len(tab_objects):
     with tab_objects[form_tab_idx]:
         if not formal_decon:
             empty_state(
@@ -414,7 +417,7 @@ if form_tab_idx and form_tab_idx < len(tab_objects):
 
 # ── TAB: 批判性审查 ──
 crit_tab_idx = form_tab_idx + 1 if form_tab_idx else None
-if crit_tab_idx and crit_tab_idx < len(tab_objects):
+if crit_tab_idx is not None and crit_tab_idx < len(tab_objects):
     with tab_objects[crit_tab_idx]:
         if not critical_review:
             empty_state(
@@ -452,8 +455,8 @@ if crit_tab_idx and crit_tab_idx < len(tab_objects):
 # ── TAB: 完整笔记 (R3 only) ──
 note_tab_idx = None
 if reading_round == "R3":
-    note_tab_idx = len(tab_objects) - 2
-if note_tab_idx and note_tab_idx < len(tab_objects):
+    note_tab_idx = len(tab_objects) - 3
+if note_tab_idx is not None and note_tab_idx < len(tab_objects):
     with tab_objects[note_tab_idx]:
         if not note_draft:
             empty_state(
@@ -473,7 +476,12 @@ if note_tab_idx and note_tab_idx < len(tab_objects):
 
             st.divider()
             st.subheader("📤 写入 Obsidian")
-            st.caption("目标 Vault: C:\\Users\\Public\\Documents")
+            try:
+                _obs_status = get("/api/obsidian/status")
+                _vault_path = _obs_status.get("vault_path") or "（未配置）"
+            except Exception:
+                _vault_path = "（未配置）"
+            st.caption(f"目标 Vault: {_vault_path}")
             if st.button("📝 写入 Obsidian（完整学术笔记）", use_container_width=True, type="primary"):
                 with st.spinner("正在写入 Obsidian Vault..."):
                     raw_cards = gen.get("concept_cards", [])
@@ -502,7 +510,7 @@ if note_tab_idx and note_tab_idx < len(tab_objects):
                     st.info(f"论文笔记: `{write_result.get('paper_path', '')}`")
 
 # ── TAB: 专业词汇 (last tab) ──
-vocab_tab_idx = len(tab_objects) - 1
+vocab_tab_idx = len(tab_objects) - 2
 with tab_objects[vocab_tab_idx]:
     if not vocabulary:
         empty_state(

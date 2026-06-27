@@ -1,4 +1,5 @@
 import streamlit as st
+from urllib.parse import quote
 from streamlit_app.utils.api_client import get, post, patch, upload_pdf
 from streamlit_app.components.icon import icon
 from streamlit_app.components.card import card
@@ -57,12 +58,12 @@ with tab_installed:
     else:
         st.caption(f"共 {len(skills)} 个技能")
         for skill in skills:
-            source_label, source_variant = SOURCE_LABELS.get(skill["source"], ("未知", "default"))
-            enabled_icon = "🟢" if skill["enabled"] else "🔴"
-            enabled_text = "已启用" if skill["enabled"] else "已禁用"
+            source_label, source_variant = SOURCE_LABELS.get(skill.get("source"), ("未知", "default"))
+            enabled_icon = "🟢" if skill.get("enabled") else "🔴"
+            enabled_text = "已启用" if skill.get("enabled") else "已禁用"
 
-            desc = skill["description"]
-            if len(desc) > 80:
+            desc = skill.get("description")
+            if desc and len(desc) > 80:
                 desc = desc[:80] + "..."
 
             with st.container():
@@ -75,13 +76,13 @@ with tab_installed:
                     <div style="color:var(--color-text-secondary); font-size:0.875rem; margin-bottom:6px;">{desc}</div>
                     """, unsafe_allow_html=True)
                     badge(source_label, variant=source_variant)
-                    badge(enabled_text, variant="success" if skill["enabled"] else "danger")
+                    badge(enabled_text, variant="success" if skill.get("enabled") else "danger")
 
                 with col_actions:
                     if st.button("查看详情", key=f"detail_{skill['id']}", use_container_width=True):
                         st.session_state[f"skill_detail_{skill['id']}"] = not st.session_state.get(f"skill_detail_{skill['id']}", False)
 
-                    if skill["enabled"]:
+                    if skill.get("enabled"):
                         if st.button("禁用", key=f"disable_{skill['id']}", use_container_width=True):
                             result = patch(f"/api/skills/{skill['id']}/toggle", {})
                             if "error" not in result:
@@ -94,11 +95,11 @@ with tab_installed:
                                 st.success(f"已启用技能「{skill['name']}」")
                                 st.rerun()
 
-                    if skill["source"] != "builtin":
+                    if skill.get("source") != "builtin":
                         if st.button("删除", key=f"delete_{skill['id']}", use_container_width=True):
                             st.session_state[f"confirm_delete_{skill['id']}"] = True
 
-                    if skill["source"] == "builtin":
+                    if skill.get("source") == "builtin":
                         st.caption("内置技能不可删除")
 
                 if st.session_state.get(f"confirm_delete_{skill['id']}", False):
@@ -222,7 +223,7 @@ with tab_clawhub:
     if search_btn and clawhub_q:
         with st.spinner("搜索中..."):
             try:
-                results = get(f"/api/skills/clawhub/search?q={clawhub_q}")
+                results = get(f"/api/skills/clawhub/search?q={quote(clawhub_q)}")
                 if isinstance(results, dict) and "error" in results:
                     st.error(f"搜索失败: {results['error']}")
                 elif isinstance(results, list) and len(results) > 0:

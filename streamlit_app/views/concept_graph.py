@@ -34,7 +34,12 @@ import re
 from pathlib import Path
 import json
 
-VAULT_CONCEPTS = Path(r"C:\Users\Public\Documents\02-概念卡片")
+try:
+    _obs_status = get("/api/obsidian/status")
+    _vault_root = _obs_status.get("vault_path") or ""
+    VAULT_CONCEPTS = Path(_vault_root) / "02-概念卡片" if _vault_root else Path("/nonexistent-vault")
+except Exception:
+    VAULT_CONCEPTS = Path("/nonexistent-vault")
 
 nodes = []
 edges = []
@@ -71,6 +76,8 @@ filtered_names = {n["name"] for n in filtered_nodes}
 filtered_edges = [e for e in edges if e["source"] in filtered_names and e["target"] in filtered_names]
 
 col1, col2 = st.columns([2, 1])
+
+cat_colors = {}
 
 with col1:
     try:

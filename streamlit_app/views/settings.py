@@ -273,7 +273,7 @@ with tab1:
 # ═════════════════════════════════════════════════════════════
 with tab2:
     st.subheader("📂 路径配置")
-    current_vault = _read_env_value("OBSIDIAN_VAULT_PATH", r"C:\Users\Public\Documents")
+    current_vault = _read_env_value("OBSIDIAN_VAULT_PATH", os.path.join(os.path.expanduser("~"), "Documents"))
     current_db = _read_env_value("DATABASE_PATH", "data/reading_assistant.db")
 
     vault = st.text_input("Obsidian Vault 路径", value=current_vault)

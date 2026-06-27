@@ -5,7 +5,7 @@ import os
 
 class Settings(BaseSettings):
     database_path: str = "data/reading_assistant.db"
-    obsidian_vault_path: str = "C:\\Users\\Public\\Documents"
+    obsidian_vault_path: str = ""
 
     default_github_repo: str = "papers-we-love/papers-we-love"
     github_token: str = ""

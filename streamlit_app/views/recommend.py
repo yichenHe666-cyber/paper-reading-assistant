@@ -33,7 +33,11 @@ with col1:
             )
             st.info(f"💡 {result.get('reason', '')}")
             if st.button("📖 开始精读这篇", key="start_rec", use_container_width=True):
-                st.session_state.selected_paper_id = result["id"]
+                rec_id = result.get("id")
+                if not rec_id:
+                    st.warning("推荐结果缺少论文 ID，无法跳转精读")
+                    st.stop()
+                st.session_state.selected_paper_id = rec_id
                 st.session_state.generated = {}
                 st.switch_page("views/reading_workbench.py")
         else:
@@ -44,7 +48,7 @@ with col2:
     st.caption("基于你标记为没看懂的概念，推荐相关论文")
     if st.button("🔍 推荐补充论文", use_container_width=True):
         with st.spinner("分析概念缺口..."):
-            result = post("/api/recommend/next", {"topic_id": ""})
+            result = post("/api/recommend/next", {"topic_id": None})
         if isinstance(result, list):
             for r in result[:3]:
                 card(

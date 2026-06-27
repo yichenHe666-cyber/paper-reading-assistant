@@ -31,7 +31,7 @@ if not topics:
     if st.button("返回首页", key="go_home_btn", use_container_width=True):
         st.switch_page("views/home_content.py")
 else:
-    topic_map = {f"{t.get('name_cn', t['name'])}": t["id"] for t in topics}
+    topic_map = {f"{t.get('name_cn') or t.get('name', '')}": t["id"] for t in topics if t.get("id")}
     topic_options = ["全部主题"] + list(topic_map.keys())
 
     if st.session_state.get("_navigate_to_topic"):
@@ -150,11 +150,16 @@ else:
                         )
 
                         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                        with col1:
+                            if paper.get("pdf_url"):
+                                if st.button("📄 PDF 阅读器", key=f"pdf_{paper['id']}", use_container_width=True):
+                                    st.session_state.selected_paper_id = paper["id"]
+                                    st.switch_page("views/pdf_reader.py")
                         with col2:
                             if paper.get("read_status") == "未读":
                                 if st.button("📖 开始精读", key=f"start_{paper['id']}", use_container_width=True):
                                     st.session_state.selected_paper_id = paper["id"]
-                                    st.session_state.generated = {}
+                                    st.session_state.generated.pop(paper["id"], None)
                                     st.switch_page("views/reading_workbench.py")
                             elif paper.get("read_status") == "精读中":
                                 if st.button("📖 继续精读", key=f"cont_{paper['id']}", use_container_width=True):

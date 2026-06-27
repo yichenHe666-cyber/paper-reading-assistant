@@ -76,8 +76,8 @@ if cost:
         if cost_detail:
             with st.expander("📋 花费明细"):
                 st.dataframe(
-                    [{"类型": c["call_type"], "模型": c["model"], "费用": f"${c['cost_usd']:.4f}",
-                      "Tokens": c["total_tokens"], "时间": str(c["created_at"])[:19]} for c in cost_detail],
+                    [{"类型": c.get("call_type"), "模型": c.get("model"), "费用": f"${c.get('cost_usd', 0):.4f}",
+                      "Tokens": c.get("total_tokens"), "时间": str(c.get("created_at", ""))[:19]} for c in cost_detail],
                     use_container_width=True, hide_index=True
                 )
     except Exception:

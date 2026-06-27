@@ -25,9 +25,12 @@ def _build_reasoning_kwargs(settings) -> dict:
     }
 
 
-def _call_llm(messages: list[dict], max_tokens: int = None, reasoning_effort: str = None) -> tuple:
+def _call_llm(messages: list[dict], max_tokens: int = None, reasoning_effort: str = None, model_name: str = None, api_base: str = None, api_key: str = None) -> tuple:
     settings = get_settings()
-    client = _get_client()
+    base_url = api_base or settings.llm_api_base
+    key = api_key or settings.llm_api_key
+    model = model_name or settings.llm_model
+    client = OpenAI(base_url=base_url, api_key=key, timeout=settings.llm_timeout)
     max_retries = 2
 
     reasoning_kwargs = _build_reasoning_kwargs(settings)
@@ -43,7 +46,7 @@ def _call_llm(messages: list[dict], max_tokens: int = None, reasoning_effort: st
     for attempt in range(max_retries + 1):
         try:
             response = client.chat.completions.create(
-                model=settings.llm_model,
+                model=model,
                 messages=messages,
                 max_tokens=max_tokens or settings.llm_max_tokens,
                 temperature=settings.llm_temperature,
@@ -63,7 +66,7 @@ def _call_llm(messages: list[dict], max_tokens: int = None, reasoning_effort: st
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.prompt_tokens + response.usage.completion_tokens,
-                "model": settings.llm_model,
+                "model": model,
                 "finish_reason": finish_reason,
                 "reasoning_content": reasoning_content,
             }

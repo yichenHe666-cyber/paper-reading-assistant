@@ -11,7 +11,7 @@ class ResearchMemory(Base):
     content = Column(Text, nullable=False)
     title = Column(String(100), nullable=False)
     tags = Column(Text, nullable=True)
-    source_paper_id = Column(Integer, ForeignKey("papers.id"), nullable=True)
+    source_paper_id = Column(String, ForeignKey("papers.id"), nullable=True)
     source_type = Column(String(20), nullable=False, index=True)
     confidence = Column(Float, default=1.0, nullable=False)
     access_count = Column(Integer, default=0, nullable=False)

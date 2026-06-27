@@ -43,12 +43,18 @@ def create_rule(db: Session, name: str, description: str, content: str, category
     return {"id": rule.id, "name": rule.name}
 
 
+RULE_UPDATEABLE_FIELDS = {
+    "name", "description", "content", "category", "priority",
+    "enabled", "scope", "workspace_id", "conflict_resolution", "metadata_json",
+}
+
+
 def update_rule(db: Session, rule_id: int, **kwargs) -> AgentRule:
     rule = db.query(AgentRule).filter(AgentRule.id == rule_id).first()
     if not rule:
         return None
     for key, value in kwargs.items():
-        if hasattr(rule, key) and value is not None:
+        if key in RULE_UPDATEABLE_FIELDS:
             setattr(rule, key, value)
     db.commit()
     db.refresh(rule)

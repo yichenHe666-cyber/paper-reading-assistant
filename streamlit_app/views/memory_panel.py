@@ -1,6 +1,6 @@
 import json
 import streamlit as st
-from streamlit_app.utils.api_client import get, post, put, delete
+from streamlit_app.utils.api_client import get, post, put, delete as api_delete
 from streamlit_app.components.badge import badge, badge_group
 from streamlit_app.components.empty_state import empty_state
 from streamlit_app.components.metric_card import metric_row
@@ -209,32 +209,33 @@ with tab_list:
                     st.caption(f"创建时间: {mem['created_at']}")
 
                 btn_col1, btn_col2 = st.columns(2)
+                mem_id = mem.get('id')
                 with btn_col1:
-                    if st.button("✏️ 编辑", key=f"edit_{mem['id']}", use_container_width=True):
-                        st.session_state.editing_memory_id = mem["id"]
+                    if st.button("✏️ 编辑", key=f"edit_{mem_id}", use_container_width=True):
+                        st.session_state.editing_memory_id = mem_id
                         st.rerun()
                 with btn_col2:
-                    if st.button("🗑️ 删除", key=f"del_{mem['id']}", use_container_width=True):
-                        st.session_state[f"confirm_del_{mem['id']}"] = True
+                    if st.button("🗑️ 删除", key=f"del_{mem_id}", use_container_width=True):
+                        st.session_state[f"confirm_del_{mem_id}"] = True
 
-                if st.session_state.get(f"confirm_del_{mem['id']}", False):
+                if mem_id and st.session_state.get(f"confirm_del_{mem_id}", False):
                     st.warning("确定要删除这条记忆吗？此为软删除，可恢复。")
                     col_y, col_n = st.columns(2)
                     with col_y:
-                        if st.button("确认删除", key=f"yes_del_{mem['id']}", type="primary", use_container_width=True):
+                        if st.button("确认删除", key=f"yes_del_{mem_id}", type="primary", use_container_width=True):
                             try:
-                                result = delete(f"/api/memory/{mem['id']}")
+                                result = api_delete(f"/api/memory/{mem_id}")
                                 if isinstance(result, dict) and result.get("error"):
                                     st.error(f"删除失败: {result['error']}")
                                 else:
                                     st.success("记忆已删除")
-                                    st.session_state[f"confirm_del_{mem['id']}"] = False
+                                    st.session_state[f"confirm_del_{mem_id}"] = False
                                     st.rerun()
                             except Exception as e:
                                 st.error(f"删除失败: {e}")
                     with col_n:
-                        if st.button("取消", key=f"no_del_{mem['id']}", use_container_width=True):
-                            st.session_state[f"confirm_del_{mem['id']}"] = False
+                        if st.button("取消", key=f"no_del_{mem_id}", use_container_width=True):
+                            st.session_state[f"confirm_del_{mem_id}"] = False
                             st.rerun()
 
     st.divider()
@@ -340,7 +341,8 @@ with tab_observations:
                 try:
                     result = post("/api/memory/observations/consolidate", {"entity_name": consolidate_entity.strip()})
                     if isinstance(result, dict) and result.get("status") == "ok":
-                        st.success(f"合并成功！观察 ID: {result.get('observation_id')}")
+                        obs_id = result.get("observation_id")
+                        st.success(f"合并成功！观察 ID: {obs_id if obs_id is not None else '—'}")
                         st.rerun()
                     else:
                         st.info(result.get("reason", "合并跳过"))

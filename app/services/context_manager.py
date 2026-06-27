@@ -70,6 +70,12 @@ class ContextManager:
             content=f"[历史对话摘要] {summary_text}",
             token_count=len(summary_text) // 4,
         )
+        # Persist the summary and remove the compressed old messages so that
+        # calculate_usage() reflects the reduced token count (before > after).
+        db.add(summary_msg)
+        for m in old_messages:
+            db.delete(m)
+        db.commit()
         return [summary_msg] + recent_messages
 
     def _hybrid_strategy(self, messages: list, context_max_tokens: int, db: Session, session_id: int) -> list:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database.session import get_db
@@ -72,7 +72,7 @@ def get_topic(topic_id: str, db: Session = Depends(get_db)):
     from app.models.paper import Paper
     topic = db.query(Topic).filter(Topic.id == topic_id).first()
     if not topic:
-        return {"error": "主题不存在"}
+        raise HTTPException(status_code=404, detail="主题不存在")
     papers = db.query(Paper).filter(Paper.topic_id == topic_id).all()
     return {
         "id": topic.id,

@@ -152,7 +152,6 @@ async def upload_documents(
                         parsed = _document_parser.parse(doc.file_path, format_hint=doc.file_format)
                         if parsed.parse_status == "success":
                             doc.parse_status = "parsed"
-                            doc.page_count = len(parsed.sections) if parsed.sections else None
                             doc.section_count = len(parsed.sections) if parsed.sections else None
                         else:
                             doc.parse_status = "failed"

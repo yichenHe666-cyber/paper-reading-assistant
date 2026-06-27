@@ -32,12 +32,18 @@ def create_workspace(db: Session, name: str, description: str = None, root_path:
     return {"id": ws.id, "name": ws.name, "slug": ws.slug}
 
 
+WORKSPACE_UPDATEABLE_FIELDS = {
+    "name", "description", "root_path", "icon", "color",
+    "settings_json", "is_default",
+}
+
+
 def update_workspace(db: Session, workspace_id: int, **kwargs) -> Workspace:
     ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not ws:
         return None
     for key, value in kwargs.items():
-        if hasattr(ws, key) and value is not None:
+        if key in WORKSPACE_UPDATEABLE_FIELDS:
             setattr(ws, key, value)
     db.commit()
     db.refresh(ws)

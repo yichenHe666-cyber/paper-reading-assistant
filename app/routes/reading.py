@@ -353,10 +353,10 @@ def recommend_next(data: dict, db: Session = Depends(get_db)):
 def download_paper_pdf(data: dict, db: Session = Depends(get_db)):
     paper_id = data.get("paper_id")
     if not paper_id:
-        return {"error": "paper_id is required"}
+        raise HTTPException(status_code=400, detail="paper_id is required")
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
 
     if not paper.pdf_url:
         from app.services.pdf_resolver import resolve_pdf_url
@@ -385,10 +385,10 @@ def download_paper_pdf(data: dict, db: Session = Depends(get_db)):
 def resolve_paper_pdf(data: dict, db: Session = Depends(get_db)):
     paper_id = data.get("paper_id")
     if not paper_id:
-        return {"error": "paper_id is required"}
+        raise HTTPException(status_code=400, detail="paper_id is required")
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
 
     from app.services.pdf_resolver import resolve_pdf_url
     result = resolve_pdf_url(paper.title, paper.pdf_url or "", paper.doi or "")
@@ -487,6 +487,10 @@ def proxy_pdf(data: dict, db: Session = Depends(get_db)):
         resp = httpx.get(url, timeout=60, follow_redirects=True)
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail=f"PDF 源返回 {resp.status_code}")
+
+        content_type = resp.headers.get("content-type", "")
+        if "pdf" not in content_type.lower() or len(resp.content) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=502, detail="PDF 源返回非 PDF 或文件过大")
 
         RAW_DIR.mkdir(parents=True, exist_ok=True)
         local_pdf.write_bytes(resp.content)

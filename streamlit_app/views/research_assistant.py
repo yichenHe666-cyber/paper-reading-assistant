@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from streamlit_app.utils.api_client import get, post
+from streamlit_app.utils.api_client import get, post, delete
 from streamlit_app.components.icon import icon
 from streamlit_app.components.card import card
 from streamlit_app.components.empty_state import empty_state
@@ -153,7 +153,7 @@ with tab_research:
         with col_b:
             st.metric("研究成本", f"${result.get('research_costs', 0):.4f}")
             if result.get("source_urls"):
-                st.metric("参考来源数", len(result["source_urls"]))
+                st.metric("参考来源数", len(result.get("source_urls", [])))
             if result.get("retriever_used"):
                 st.metric("搜索引擎", result["retriever_used"])
 
@@ -185,7 +185,7 @@ with tab_research:
 
         if result.get("source_urls"):
             with st.expander("🔗 参考来源"):
-                for url in result["source_urls"]:
+                for url in result.get("source_urls", []):
                     st.markdown(f"- [{url}]({url})")
 
 with tab_history:
@@ -292,17 +292,11 @@ with tab_history:
             with col_del2:
                 if st.button("🗑️ ", key=f"del_{r['id']}", help="删除此研究"):
                     try:
-                        from streamlit_app.utils.api_client import get as _get
-                        import requests
-                        api_key = __import__("os").getenv("API_KEY", "")
-                        headers = {"X-API-Key": api_key} if api_key else {}
-                        resp = requests.delete(
-                            f"http://127.0.0.1:8000/api/research/{r['id']}",
-                            headers=headers,
-                            timeout=10,
-                        )
-                        if resp.status_code == 200:
+                        result = delete(f"/api/research/{r['id']}")
+                        if isinstance(result, dict) and not result.get("error"):
                             st.success("已删除")
                             st.rerun()
+                        else:
+                            st.error(f"删除失败: {result.get('error', '未知错误') if isinstance(result, dict) else '未知错误'}")
                     except Exception as e:
                         st.error(f"删除失败: {e}")

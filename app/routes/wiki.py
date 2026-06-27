@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models.paper import Paper
@@ -12,11 +12,11 @@ router = APIRouter()
 def ingest(data: dict, db: Session = Depends(get_db)):
     paper_id = data.get("paper_id")
     if not paper_id:
-        return {"error": "paper_id is required"}
+        raise HTTPException(status_code=400, detail="paper_id is required")
 
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
 
     topic = db.query(Topic).filter(Topic.id == paper.topic_id).first()
 
@@ -44,7 +44,7 @@ def ingest(data: dict, db: Session = Depends(get_db)):
 @router.post("/ingest-document")
 def ingest_doc(data: dict):
     if not data.get("title"):
-        return {"error": "title is required"}
+        raise HTTPException(status_code=400, detail="title is required")
     try:
         return ingest_document(data)
     except Exception as e:
@@ -60,7 +60,7 @@ def ingest_know(data: dict):
     knowledge = data.get("knowledge", {})
     edges = data.get("edges", [])
     if not document.get("title"):
-        return {"error": "document.title is required"}
+        raise HTTPException(status_code=400, detail="document.title is required")
     try:
         return ingest_knowledge(document, knowledge, edges)
     except Exception as e:
@@ -74,7 +74,7 @@ def ingest_know(data: dict):
 def query(data: dict):
     question = data.get("question", "")
     if not question:
-        return {"error": "question is required"}
+        raise HTTPException(status_code=400, detail="question is required")
     try:
         return query_wiki(question)
     except Exception as e:

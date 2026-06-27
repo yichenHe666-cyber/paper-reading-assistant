@@ -85,6 +85,8 @@ class ChatEngine:
             response_content, usage = _call_llm(
                 llm_messages,
                 model_name=session.model_name,
+                api_base=api_base,
+                api_key=api_key,
                 max_tokens=settings.llm_max_tokens,
             )
             if isinstance(response_content, dict):
@@ -162,6 +164,23 @@ class ChatEngine:
             )
             tool_calls = result.get("tool_calls", [])
             if tool_calls:
+                # Append the assistant message carrying tool_calls so the model
+                # knows what it requested (OpenAI tool-call protocol).
+                llm_messages.append({
+                    "role": "assistant",
+                    "content": result.get("content") or "",
+                    "tool_calls": [
+                        {
+                            "id": tc["id"],
+                            "type": tc.get("type", "function"),
+                            "function": {
+                                "name": tc["function"]["name"],
+                                "arguments": tc["function"]["arguments"],
+                            },
+                        }
+                        for tc in tool_calls
+                    ],
+                })
                 for tc in tool_calls:
                     func_name = tc["function"]["name"]
                     func_args = tc["function"]["arguments"]
@@ -190,6 +209,13 @@ class ChatEngine:
                     )
                     db.add(result_msg)
                     session.message_count += 1
+                    # Append the tool result message so the model can see it
+                    # when generating the final response.
+                    llm_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": skill_result[:2000],
+                    })
                 db.commit()
                 return self._send_normal(db, session, llm_messages, api_base, api_key)
             content = result.get("content", "")

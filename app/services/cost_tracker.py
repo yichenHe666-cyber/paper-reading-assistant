@@ -40,7 +40,7 @@ def record_cost(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=prompt_tokens + completion_tokens,
-        cost_usd=_estimate_cost(prompt_tokens, completion_tokens),
+        cost_usd=_estimate_cost(prompt_tokens, completion_tokens, model),
         paper_id=paper_id,
     )
     db.add(log)
@@ -48,16 +48,57 @@ def record_cost(
     return log
 
 
-def _estimate_cost(prompt_tokens: int, completion_tokens: int) -> float:
+def _estimate_cost(prompt_tokens: int, completion_tokens: int, model: str = None) -> float:
     settings = get_settings()
-    model = settings.llm_model.lower()
-    if "gpt-4o-mini" in model:
-        return (prompt_tokens * 0.15 + completion_tokens * 0.60) / 1_000_000
-    elif "gpt-4o" in model:
-        return (prompt_tokens * 2.50 + completion_tokens * 10.00) / 1_000_000
-    elif "claude" in model:
-        return (prompt_tokens * 0.80 + completion_tokens * 4.00) / 1_000_000
-    return 0.0
+    model_name = (model or settings.llm_model).lower()
+
+    # Per-token price table (USD per token; multiply by token count directly).
+    # Values are taken from official provider pricing pages (per 1M tokens divided by 1M).
+    price_table = {
+        # OpenAI
+        "gpt-4o-mini": (0.15, 0.60),
+        "gpt-4o": (2.50, 10.00),
+        "gpt-4.1": (2.00, 8.00),
+        "gpt-4.1-mini": (0.40, 1.60),
+        "gpt-4.1-nano": (0.10, 0.40),
+        "gpt-4-turbo": (10.00, 30.00),
+        "gpt-3.5-turbo": (0.50, 1.50),
+        "o1-mini": (3.00, 12.00),
+        "o1": (15.00, 60.00),
+        # Anthropic (OpenAI-compatible gateways)
+        "claude-3-haiku": (0.25, 1.25),
+        "claude-3-sonnet": (3.00, 15.00),
+        "claude-3-opus": (15.00, 75.00),
+        "claude-3-5-sonnet": (3.00, 15.00),
+        "claude-3-5-haiku": (0.80, 4.00),
+        # DeepSeek
+        "deepseek-chat": (0.27, 1.10),
+        "deepseek-reasoner": (0.55, 2.19),
+        # Google Gemini (OpenAI-compatible endpoint)
+        "gemini-1.5-flash": (0.075, 0.30),
+        "gemini-1.5-pro": (1.25, 5.00),
+        "gemini-2.0-flash": (0.10, 0.40),
+        # xAI
+        "grok-2": (2.00, 10.00),
+        # Kimi / Moonshot
+        "moonshot-v1-8k": (1.20, 1.20),
+        # Conservative default rate for unknown models (USD per 1M tokens).
+        "__default__": (1.00, 2.00),
+    }
+
+    def _lookup(name: str):
+        if name in price_table:
+            return price_table[name]
+        for key, value in price_table.items():
+            if key != "__default__" and key in name:
+                return value
+        return price_table["__default__"]
+
+    input_rate, output_rate = _lookup(model_name)
+    # Price table stores USD per 1M tokens (per official provider pricing
+    # pages). Convert to per-token rate before multiplying by token count.
+    cost = (prompt_tokens * input_rate + completion_tokens * output_rate) / 1_000_000
+    return cost
 
 
 def record_llm_call(
@@ -76,7 +117,7 @@ def record_llm_call(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=prompt_tokens + completion_tokens,
-        cost_usd=_estimate_cost(prompt_tokens, completion_tokens),
+        cost_usd=_estimate_cost(prompt_tokens, completion_tokens, model),
         duration_ms=duration_ms,
         paper_id=paper_id,
     )

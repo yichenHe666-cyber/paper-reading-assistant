@@ -1,5 +1,6 @@
 import json
 import time
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models.sandbox_record import SandboxRecord
 from app.config import get_settings
@@ -11,22 +12,25 @@ DENIED_PERMISSIONS = ["write_filesystem", "system_command", "env_modify"]
 
 def execute_in_sandbox(db: Session, operation_type: str, input_data: dict, session_id: int = None, workspace_id: int = None, extra_permissions: list = None) -> dict:
     settings = get_settings()
+    # 先校验权限再建记录，避免被拒绝的权限被持久化到数据库
+    extra_permissions = extra_permissions or []
+    for perm in extra_permissions:
+        if perm in DENIED_PERMISSIONS:
+            raise HTTPException(status_code=400, detail=f"权限「{perm}」被禁止")
+    effective_permissions = DEFAULT_PERMISSIONS + extra_permissions
     record = SandboxRecord(
         session_id=session_id,
         workspace_id=workspace_id,
         operation_type=operation_type,
         input_data=json.dumps(input_data, ensure_ascii=False),
         status="running",
-        permissions_used=json.dumps(DEFAULT_PERMISSIONS + (extra_permissions or []), ensure_ascii=False),
+        permissions_used=json.dumps(effective_permissions, ensure_ascii=False),
     )
     db.add(record)
     db.commit()
     db.refresh(record)
     start_time = time.time()
     try:
-        for perm in (extra_permissions or []):
-            if perm in DENIED_PERMISSIONS:
-                raise PermissionError(f"权限「{perm}」被禁止")
         result = _execute_operation(db, operation_type, input_data)
         duration = int((time.time() - start_time) * 1000)
         record.output_data = json.dumps(result, ensure_ascii=False) if isinstance(result, (dict, list)) else str(result)

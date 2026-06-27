@@ -34,34 +34,74 @@ def health_check() -> bool:
         return False
 
 
+def _handle_response(resp):
+    if not (200 <= resp.status_code < 300):
+        try:
+            detail = resp.json()
+        except Exception:
+            return {"error": f"HTTP {resp.status_code}"}
+        if isinstance(detail, dict):
+            return {"error": detail.get("detail", f"HTTP {resp.status_code}")}
+        return {"error": detail if detail else f"HTTP {resp.status_code}"}
+    try:
+        return resp.json()
+    except Exception:
+        return {"error": "响应非 JSON"}
+
+
 def get(endpoint: str):
     requests = _import_requests()
-    resp = requests.get(f"{API_BASE}{endpoint}", timeout=10, headers=_headers())
-    return resp.json()
+    if not requests:
+        return {"error": "requests 库未安装"}
+    try:
+        resp = requests.get(f"{API_BASE}{endpoint}", timeout=10, headers=_headers())
+    except Exception as e:
+        return {"error": str(e)}
+    return _handle_response(resp)
 
 
 def post(endpoint: str, data: dict = None):
     requests = _import_requests()
-    resp = requests.post(f"{API_BASE}{endpoint}", json=data or {}, timeout=600, headers=_headers())
-    return resp.json()
+    if not requests:
+        return {"error": "requests 库未安装"}
+    try:
+        resp = requests.post(f"{API_BASE}{endpoint}", json=data or {}, timeout=600, headers=_headers())
+    except Exception as e:
+        return {"error": str(e)}
+    return _handle_response(resp)
 
 
 def patch(endpoint: str, data: dict):
     requests = _import_requests()
-    resp = requests.patch(f"{API_BASE}{endpoint}", json=data, timeout=30, headers=_headers())
-    return resp.json()
+    if not requests:
+        return {"error": "requests 库未安装"}
+    try:
+        resp = requests.patch(f"{API_BASE}{endpoint}", json=data, timeout=30, headers=_headers())
+    except Exception as e:
+        return {"error": str(e)}
+    return _handle_response(resp)
 
 
 def put(endpoint: str, data: dict):
     requests = _import_requests()
-    resp = requests.put(f"{API_BASE}{endpoint}", json=data, timeout=30, headers=_headers())
-    return resp.json()
+    if not requests:
+        return {"error": "requests 库未安装"}
+    try:
+        resp = requests.put(f"{API_BASE}{endpoint}", json=data, timeout=30, headers=_headers())
+    except Exception as e:
+        return {"error": str(e)}
+    return _handle_response(resp)
 
 
 def delete(endpoint: str):
     requests = _import_requests()
-    resp = requests.delete(f"{API_BASE}{endpoint}", timeout=30, headers=_headers())
-    return resp.json()
+    if not requests:
+        return {"error": "requests 库未安装"}
+    try:
+        resp = requests.delete(f"{API_BASE}{endpoint}", timeout=30, headers=_headers())
+    except Exception as e:
+        return {"error": str(e)}
+    return _handle_response(resp)
 
 
 def upload_pdf(endpoint: str, paper_id: str, file_bytes: bytes, filename: str = "upload.pdf"):

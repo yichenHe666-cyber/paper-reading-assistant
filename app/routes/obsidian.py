@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.services.obsidian_writer import ObsidianWriter
@@ -34,7 +34,7 @@ def write_paper_note(data: dict, db: Session = Depends(get_db)):
     note_draft = data.get("note_draft", "")
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
     paper_dict = {
         "id": paper.id, "title": paper.title, "authors": paper.authors,
         "year": paper.year, "topic_id": paper.topic_id, "subtopic": paper.subtopic,
@@ -75,7 +75,7 @@ def write_all_to_obsidian(data: dict, db: Session = Depends(get_db)):
 
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
     paper_dict = {
         "id": paper.id, "title": paper.title, "authors": paper.authors,
         "year": paper.year, "topic_id": paper.topic_id, "subtopic": paper.subtopic,
@@ -151,11 +151,11 @@ def rollback_snapshot(data: dict, db: Session = Depends(get_db)):
 
     paper = db.query(Paper).filter(Paper.id == data.get("paper_id")).first()
     if not paper:
-        return {"error": "论文不存在"}
+        raise HTTPException(status_code=404, detail="论文不存在")
 
     old_content = rollback_to_version(db, paper.id, snapshot_id)
     if old_content is None:
-        return {"error": "快照不存在"}
+        raise HTTPException(status_code=404, detail="快照不存在")
 
     settings = get_settings()
     obsidian_path = paper.obsidian_path
