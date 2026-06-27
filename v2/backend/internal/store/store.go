@@ -14,15 +14,17 @@ import (
 	"database/sql"
 	"fmt"
 
-	// 注册纯 Go 的 SQLite 驱动，import 别名 "sqlite3" 供 database/sql 使用。
+	// 注册纯 Go 的 SQLite 驱动，import 别名供 database/sql 使用。
+	// 注意：modernc.org/sqlite v1.x 注册的驱动名为 "sqlite"（非 "sqlite3"），
+	// "sqlite3" 是 mattn/go-sqlite3（cgo 版）的驱动名，二者不可混用。
 	_ "modernc.org/sqlite"
 )
 
 // Open 打开（必要时创建）SQLite 数据库文件并启用 WAL 模式。
 // dbPath 必须为绝对路径（由 config 层保证）。
 func Open(dbPath string) (*sql.DB, error) {
-	// 驱动名 "sqlite3" 来自 modernc.org/sqlite；DSN 用文件路径。
-	db, err := sql.Open("sqlite3", dbPath)
+	// 驱动名 "sqlite" 来自 modernc.org/sqlite；DSN 用文件路径。
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}

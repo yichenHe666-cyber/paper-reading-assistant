@@ -28,8 +28,9 @@ type Config struct {
 	LogDir    string // 日志目录（绝对路径）
 	BackupDir string // 备份目录（绝对路径）
 
-	Server ServerConfig // HTTP 服务配置
-	LLM    LLMConfig    // LLM provider 配置
+	Server  ServerConfig  // HTTP 服务配置
+	LLM     LLMConfig     // LLM provider 配置
+	GitHub  GitHubConfig  // GitHub 数据源配置
 }
 
 // ServerConfig 描述 HTTP 监听参数。
@@ -49,6 +50,12 @@ type LLMConfig struct {
 	Timeout        float64 // 请求超时（秒）
 	OllamaURL      string  // Ollama 本地服务地址
 	DailyBudgetUSD float64 // 每日 LLM 预算上限（美元）
+}
+
+// GitHubConfig 描述论文数据源（Papers We Love 仓库）配置。
+type GitHubConfig struct {
+	Token       string // GitHub Personal Access Token（空则匿名访问，受 60/hour 限流）
+	DefaultRepo string // 默认同步仓库，格式 "owner/repo"，如 papers-we-love/papers-we-love
 }
 
 // Load 从环境变量加载配置，绝对化路径并做启动校验。
@@ -71,6 +78,10 @@ func Load() (*Config, error) {
 			Timeout:        getEnvFloat("LLM_TIMEOUT", 120.0),
 			OllamaURL:      getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 			DailyBudgetUSD: getEnvFloat("DAILY_LLM_BUDGET_USD", 3.0),
+		},
+		GitHub: GitHubConfig{
+			Token:       getEnv("GITHUB_TOKEN", ""),
+			DefaultRepo: getEnv("DEFAULT_GITHUB_REPO", "papers-we-love/papers-we-love"),
 		},
 	}
 	// 路径绝对化（痛点②修复核心）
