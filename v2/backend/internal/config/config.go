@@ -36,7 +36,7 @@ type Config struct {
 
 // ServerConfig 描述 HTTP 监听参数。
 type ServerConfig struct {
-	Host string // 监听地址，默认 0.0.0.0
+	Host string // 监听地址，默认 127.0.0.1（安全：不暴露公网，需外网访问用反代）
 	Port int    // 监听端口，默认 8000
 }
 
@@ -73,7 +73,7 @@ func Load() (*Config, error) {
 		// NRO_DATA_DIR 为空时由 resolvePaths() 填充默认值
 		DataDir: getEnv("NRO_DATA_DIR", ""),
 		Server: ServerConfig{
-			Host: getEnv("SERVER_HOST", "0.0.0.0"),
+			Host: getEnv("SERVER_HOST", "127.0.0.1"),
 			Port: getEnvInt("SERVER_PORT", 8000),
 		},
 		LLM: LLMConfig{

@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+# 核动力科研牛马 v2 — Rust core 镜像（向量化/记忆/梦境）。
+#
+# 多阶段构建：builder 用 rust 编译 release 二进制，runtime 仅含二进制。
+# 安全：非 root 用户；不映射公网端口（仅 compose 内网 8788 供 backend 访问）。
+FROM rust:1.82-bookworm AS builder
+
+WORKDIR /src
+
+# 先拷 Cargo 清单利用层缓存编译依赖
+COPY core/Cargo.toml core/Cargo.lock ./
+# 创建空 lib.rs/main.rs 占位，让 cargo 预编译依赖
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release || true
+
+# 拷真实源码并编译
+COPY core/src ./src
+RUN touch src/main.rs src/lib.rs && \
+    cargo build --release
+
+# --- runtime ---
+FROM debian:bookworm-slim AS runtime
+
+# 安装 CA 证书（调 embedding 服务 HTTPS）与 libssl（reqwest rustls 实际不依赖 openssl，但兜底）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/* && \
+    addgroup --system app && adduser --system --ingroup app app
+
+WORKDIR /app
+COPY --from=builder /src/target/release/nuclear-ox-core /app/nuclear-ox-core
+
+# 数据目录与 backend 共享同一卷（SQLite WAL 多进程）
+RUN mkdir -p /data && chown -R app:app /data /app
+USER app
+
+ENV NRO_DATA_DIR=/data \
+    CORE_HOST=127.0.0.1 \
+    CORE_PORT=8788 \
+    RUST_LOG=info
+
+# 仅 compose 内网暴露，不 publish 到宿主
+EXPOSE 8788
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8788/health || exit 1
+
+ENTRYPOINT ["/app/nuclear-ox-core"]

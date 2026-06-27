@@ -7,8 +7,13 @@
 //!
 //! 并发模型：rusqlite::Connection 非线程安全，用 Mutex 包裹。
 //! SQLite 单写多读 + WAL，并发度有限但够用（core 仅被 Go 单实例调用）。
+//!
+//! Mutex 中毒恢复：std::sync::Mutex 在持有锁的线程 panic 后会"中毒"，
+//! 后续 lock() 返回 Err。直接 unwrap 会导致二次 panic 连锁瘫痪整个服务。
+//! 本模块用 `lock().unwrap_or_else(|e| e.into_inner())` 显式恢复中毒锁，
+//! 拿到 Connection 继续服务——即便上次操作 panic，DB 仍可用。
 
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use anyhow::Result;
 use rusqlite::Connection;
@@ -26,7 +31,7 @@ impl Db {
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;\
              PRAGMA foreign_keys=ON;\
-             PRAGMA busy_timeout=5000;",
+             PRAGMA busy_timeout=15000;",
         )?;
         Ok(Self {
             conn: Mutex::new(conn),
@@ -41,7 +46,7 @@ impl Db {
     /// memory_vectors：存储 embedding 向量（与 memories.embedding_id 关联）。
     /// 首期不引入专门向量库，向量与元数据同存 SQLite，相似度检索用 brute-force cosine。
     pub fn ensure_dream_diary_table(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS dream_diary (
                 id              TEXT PRIMARY KEY,
@@ -71,8 +76,13 @@ impl Db {
     where
         F: FnOnce(&Connection) -> T,
     {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         f(&conn)
+    }
+
+    /// 获取锁，中毒时显式恢复（拿到内部 Connection 继续服务，而非二次 panic）。
+    fn lock(&self) -> MutexGuard<'_, Connection> {
+        self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 

@@ -1,0 +1,112 @@
+# 核动力科研牛马 v2 — Docker Compose 编排。
+#
+# 三个服务：backend（Go API）、core（Rust 向量化/记忆/梦境）、frontend（nginx SPA）。
+# 数据卷：nro-data 挂载到 backend 与 core 的 /data，共享同一 SQLite 文件（WAL 多进程）。
+# 网络：nro-net 内网，core 不 publish 公网端口，仅 backend 可访问 8788。
+#
+# 一键启动：docker compose up -d
+# 首次需配置 .env（拷贝 .env.example 填写 LLM key 等）。
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    image: nuclear-ox-backend:v2
+    container_name: nro-backend
+    restart: unless-stopped
+    environment:
+      # 监听仅本机（compose 网络内可达）；需外网访问经 frontend nginx 反代
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8000"
+      # 数据目录（与 core 共享卷）
+      NRO_DATA_DIR: "/data"
+      # LLM 配置（从 .env 注入）
+      LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
+      LLM_API_BASE: "${LLM_API_BASE:-http://host.docker.internal:11434/v1}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_MODEL: "${LLM_MODEL:-qwen2.5:7b}"
+      # Rust core 地址（compose 内网服务名）
+      CORE_BASE_URL: "http://core:8788"
+      CORE_TIMEOUT: "60"
+      # GitHub 同步
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+      DEFAULT_GITHUB_REPO: "${DEFAULT_GITHUB_REPO:-papers-we-love/papers-we-love}"
+      TZ: "Asia/Shanghai"
+    volumes:
+      - nro-data:/data
+    networks:
+      - nro-net
+    ports:
+      # 仅本机暴露，外网访问走 frontend nginx 的 8080
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - core
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  core:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.core
+    image: nuclear-ox-core:v2
+    container_name: nro-core
+    restart: unless-stopped
+    environment:
+      NRO_DATA_DIR: "/data"
+      CORE_HOST: "0.0.0.0"
+      CORE_PORT: "8788"
+      # embedding 配置
+      EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-ollama}"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-embed-text}"
+      EMBEDDING_API_BASE: "${EMBEDDING_API_BASE:-http://host.docker.internal:11434}"
+      EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
+      EMBEDDING_TIMEOUT_SECS: "30"
+      # 记忆参数（spec §5.3）
+      RECENCY_HALF_LIFE_DAYS: "30"
+      MAX_AGE_DAYS: "365"
+      RUST_LOG: "info"
+      TZ: "Asia/Shanghai"
+    volumes:
+      - nro-data:/data
+    networks:
+      - nro-net
+    # 不 publish 端口：仅 compose 内网 backend 可访问
+    expose:
+      - "8788"
+    extra_hosts:
+      # 让容器内能访问宿主的 Ollama
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8788/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    image: nuclear-ox-frontend:v2
+    container_name: nro-frontend
+    restart: unless-stopped
+    networks:
+      - nro-net
+    ports:
+      # 唯一对外端口：本机 8080（生产可改 80 或加反代/TLS）
+      - "8080:8080"
+    depends_on:
+      - backend
+
+volumes:
+  nro-data:
+    # 命名卷：容器重建不丢数据（痛点②根治的部署层保障）
+    name: nro-data
+
+networks:
+  nro-net:
+    driver: bridge

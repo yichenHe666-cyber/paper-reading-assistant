@@ -30,7 +30,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // 生产构建关闭 sourcemap：避免原始 TS 源码（含注释与业务逻辑）随产物
+    // 发布给任意访问者，造成信息泄露。调试需要时改用本地 dev server。
+    sourcemap: false,
     // 单文件体积警告阈值，便于发现依赖膨胀
     chunkSizeWarningLimit: 800,
   },

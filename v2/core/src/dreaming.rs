@@ -122,22 +122,22 @@ impl Dreamer {
 
     /// 执行一次完整梦境（Light → REM → Deep）。
     ///
-    /// 每阶段独立写一条 dream_diary 行（id 唯一，run_id 共享），
+    /// 每阶段执行完毕后立即写入对应 stage 的 diary 行（id 唯一，run_id 共享），
     /// 最终 done 行的 id 作为本次梦境的对外 diary_id 返回。
     /// list_diary 默认只返回 stage='done' 的行用于展示，中间阶段可通过 run_id 关联查询。
+    ///
+    /// 注意：阶段标签必须与实际执行内容一致（修复审查发现的"错位一档"问题）——
+    /// light 行存 Light Sleep 结果，rem 行存 REM 结果，deep 行存 Deep 结果，done 行为汇总。
     pub async fn dream(&self) -> Result<DreamResult> {
         let run_id = Uuid::new_v4().to_string();
         let started_at = now_iso();
-
-        // 起始日志
-        self.insert_diary_stage(&run_id, &started_at, "light", 0, 0, 0, "梦境开始", "")?;
 
         // 1. Light Sleep：去重 + 强化信号
         let (candidates, light_summary) = self.light_sleep().await?;
         self.insert_diary_stage(
             &run_id,
             &started_at,
-            "rem",
+            "light",
             candidates.len() as i64,
             0,
             0,
@@ -150,7 +150,7 @@ impl Dreamer {
         self.insert_diary_stage(
             &run_id,
             &started_at,
-            "deep",
+            "rem",
             candidates.len() as i64,
             0,
             0,
@@ -162,13 +162,23 @@ impl Dreamer {
         let (breakdowns, promoted_count, decayed_count, deep_summary) =
             self.deep_sleep(candidates).await?;
         let finished_at = now_iso();
+        // deep 行写入 Deep Sleep 的评分明细
+        let deep_details_json = serde_json::to_string(&breakdowns).unwrap_or_default();
+        self.insert_diary_stage(
+            &run_id,
+            &started_at,
+            "deep",
+            breakdowns.len() as i64,
+            promoted_count as i64,
+            decayed_count as i64,
+            &deep_summary,
+            &deep_details_json,
+        )?;
+
+        // done 行：汇总
         let summary = format!(
-            "{} | {}",
-            deep_summary,
-            format!(
-                "升级 {} 条，衰减 {} 条，评分 {} 条",
-                promoted_count, decayed_count, breakdowns.len()
-            )
+            "{} | 升级 {} 条，衰减 {} 条，评分 {} 条",
+            deep_summary, promoted_count, decayed_count, breakdowns.len()
         );
         let details_json = serde_json::to_string(&breakdowns).unwrap_or_default();
 
@@ -343,9 +353,11 @@ impl Dreamer {
         candidates: Vec<Candidate>,
     ) -> Result<(Vec<ScoreBreakdown>, usize, usize, String)> {
         let long_term = self.memory.list_by_layer(MemoryLayer::LongTerm, 0)?;
-        let episodic = self.memory.list_by_layer(MemoryLayer::Episodic, 0)?;
         let now = chrono::Utc::now();
         let half_life = self.cfg.recency_half_life_days.max(1.0);
+        // spec §5.3：超龄记忆不再 eligible 升级。
+        // max_age_days == 0 表示不限制（兼容旧配置）。
+        let max_age = self.cfg.max_age_days;
 
         let mut breakdowns: Vec<ScoreBreakdown> = Vec::new();
         let mut promoted = 0usize;
@@ -354,6 +366,24 @@ impl Dreamer {
         for c in &candidates {
             let words = tokenize(&c.memory.content);
             let word_set: HashSet<&String> = words.iter().collect();
+
+            // 时效性：半衰期衰减（先算，供 max_age 判定与评分共用）
+            let recency = compute_recency(&c.memory.created_at, now, half_life);
+            // recency 限制在 [0,1]：created_at 在未来时 age<0 会让 0.5^(负)>1，扭曲评分
+            let recency = recency.clamp(0.0, 1.0);
+
+            // 超龄过滤（spec §5.3 maxAgeDays）：超过最大年龄的候选不升级也不衰减，
+            // 仅记录评分明细便于调试。age_days 通过半衰期反推近似。
+            let age_days = if recency > 0.0 && recency < 1.0 {
+                // recency = 0.5^(age/half_life) → age = half_life * log2(1/recency)
+                half_life * (1.0 / recency).log2()
+            } else if recency >= 1.0 {
+                0.0
+            } else {
+                // recency=0 视为极老
+                f64::MAX
+            };
+            let over_age = max_age > 0 && age_days > max_age as f64;
 
             // 1. 相关性：与已有 long_term 的关键字重叠率（最大值）
             let relevance = if long_term.is_empty() {
@@ -379,7 +409,7 @@ impl Dreamer {
 
             // 2. 频率：归一化到 0~1（log2 缩放）
             let frequency_raw = c.frequency as f64;
-            let frequency = (frequency_raw.log2() / 5.0).min(1.0).max(0.0);
+            let frequency = (frequency_raw.log2() / 5.0).clamp(0.0, 1.0);
 
             // 3. 查询多样性：用 created_at 离散度近似（不同时段被引用 = 多样性高）
             //    简化：候选频率 > 1 视为有多样性，按 log 缩放
@@ -389,8 +419,7 @@ impl Dreamer {
                 0.2
             };
 
-            // 4. 时效性：半衰期衰减
-            let recency = compute_recency(&c.memory.created_at, now, half_life);
+            // 4. 时效性：已在循环开头计算（供 max_age 判定与评分共用）
 
             // 5. 整合度：与已晋升 long_term 的连接数（关键字重叠 > 0.3 的数量）
             let integration = if long_term.is_empty() {
@@ -412,8 +441,7 @@ impl Dreamer {
             // 6. 概念丰富度：内容长度 / 唯一词数
             let unique_words = word_set.len().max(1);
             let richness = (c.memory.content.len() as f64 / (unique_words as f64 * 10.0))
-                .min(1.0)
-                .max(0.0);
+                .clamp(0.0, 1.0);
 
             // 总分 = 各信号加权和 + 强化加成
             let total = W_RELEVANCE * relevance
@@ -424,26 +452,32 @@ impl Dreamer {
                 + W_RICHNESS * richness
                 + c.reinforcement;
 
-            // 三阈值门槛判定
-            let promoted_flag = total >= THRESHOLD_SCORE
+            // 三阈值门槛判定 + 超龄豁免（spec §5.3 maxAgeDays）
+            let promoted_flag = !over_age
+                && total >= THRESHOLD_SCORE
                 && c.frequency >= THRESHOLD_FREQUENCY
                 && recency >= THRESHOLD_RECENCY;
 
-            let reason = if promoted_flag {
+            let reason = if over_age {
                 format!(
-                    "升级：总分 {:.2}>=0.5，频率 {}>=2，时效 {:.2}>=0.3",
-                    total, c.frequency, recency
+                    "未升级：超龄（约 {:.0} 天 > max_age {}）",
+                    age_days, max_age
+                )
+            } else if promoted_flag {
+                format!(
+                    "升级：总分 {:.2}>={:.1}，频率 {}>={}，时效 {:.2}>={:.1}",
+                    total, THRESHOLD_SCORE, c.frequency, THRESHOLD_FREQUENCY, recency, THRESHOLD_RECENCY
                 )
             } else {
                 let mut blockers = vec![];
                 if total < THRESHOLD_SCORE {
-                    blockers.push(format!("总分 {:.2}<0.5", total));
+                    blockers.push(format!("总分 {:.2}<{:.1}", total, THRESHOLD_SCORE));
                 }
                 if c.frequency < THRESHOLD_FREQUENCY {
-                    blockers.push(format!("频率 {}<2", c.frequency));
+                    blockers.push(format!("频率 {}<{}", c.frequency, THRESHOLD_FREQUENCY));
                 }
                 if recency < THRESHOLD_RECENCY {
-                    blockers.push(format!("时效 {:.2}<0.3", recency));
+                    blockers.push(format!("时效 {:.2}<{:.1}", recency, THRESHOLD_RECENCY));
                 }
                 format!("未升级：{}", blockers.join("，"))
             };
@@ -451,8 +485,8 @@ impl Dreamer {
             if promoted_flag {
                 self.memory.promote_to_long_term(&c.memory.id, total)?;
                 promoted += 1;
-            } else if total < 0.2 {
-                // 极低分标记衰减
+            } else if !over_age && total < 0.2 {
+                // 极低分标记衰减（超龄的不衰减，仅静默）
                 self.memory.mark_decaying(&c.memory.id)?;
                 decayed += 1;
             }
@@ -472,7 +506,6 @@ impl Dreamer {
             });
         }
 
-        let _ = episodic; // 保留用于未来扩展（如跨会话多样性）
         let summary = format!(
             "Deep Sleep 完成：{} 候选评分",
             breakdowns.len()
@@ -484,6 +517,7 @@ impl Dreamer {
 
     /// 写入一条 dream_diary 阶段日志。内部生成唯一 id，返回该 id。
     /// 同一次梦境的 light/rem/deep/done 四阶段共享 run_id。
+    #[allow(clippy::too_many_arguments)]
     fn insert_diary_stage(
         &self,
         run_id: &str,
@@ -514,25 +548,48 @@ fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// 简单分词：按非字母数字字符切分，转小写，过滤停用词与短词。
-///
-/// 首期不引入分词库，CJK 与 ASCII 混合按字符切分（中文单字视为 token）。
+/// 简单分词：ASCII 按非字母数字切分（转小写，过滤 <2 字符短词）；
+/// CJK（含中日韩统一表意文字、扩展区）逐字成 token——这是关键修正：
+/// 原 tokenize 让 is_alphanumeric() 对 CJK 返回 true 导致连续中文被累加成
+/// 一个大 token，使 Jaccard 对中文几乎失效（spec §5 Light Sleep 去重与 Deep
+/// 相关性评分对中文论文场景名存实亡）。逐字切分后中文相似度才有意义。
 fn tokenize(s: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut current = String::new();
     for ch in s.chars() {
-        if ch.is_alphanumeric() {
+        if is_cjk(ch) {
+            // CJK 字符：先 flush 当前 ASCII 累积，再单独成 token
+            if !current.is_empty() {
+                push_token(&mut out, &current);
+                current.clear();
+            }
+            out.push(ch.to_string());
+        } else if ch.is_alphanumeric() {
             current.push(ch.to_ascii_lowercase());
         } else if !current.is_empty() {
             push_token(&mut out, &current);
             current.clear();
-            // CJK 字符单独成 token（is_alphanumeric 对 CJK 返回 true，故走上面分支）
         }
     }
     if !current.is_empty() {
         push_token(&mut out, &current);
     }
     out
+}
+
+/// 判断字符是否为 CJK（中日韩统一表意文字及常见扩展区）。
+/// 范围参照 Unicode 标准 UAX#24；覆盖常用汉字与日韩汉字。
+fn is_cjk(ch: char) -> bool {
+    matches!(ch as u32,
+        0x4E00..=0x9FFF   // CJK 统一表意文字（常用汉字）
+        | 0x3400..=0x4DBF // 扩展 A
+        | 0x20000..=0x2A6DF // 扩展 B
+        | 0x2A700..=0x2B73F // 扩展 C
+        | 0x2B740..=0x2B81F // 扩展 D
+        | 0x3040..=0x309F // 平假名
+        | 0x30A0..=0x30FF // 片假名
+        | 0xAC00..=0xD7AF // 韩文音节
+    )
 }
 
 /// 推入 token，过滤过短（<2 字符）的英文词。CJK 单字保留。

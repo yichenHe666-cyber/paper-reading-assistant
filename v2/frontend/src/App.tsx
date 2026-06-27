@@ -4,19 +4,19 @@
 //   - 路由用 react-router，URL 是真相源，刷新可恢复（取代散落的 session_state）；
 //   - 侧边栏导航固定，主区域按路由切换；
 //   - 用 lucide-react 本地图标，杜绝运行时 CDN 依赖导致方框。
+//   - ErrorBoundary 包裹路由区，子组件渲染异常不致整应用白屏。
 import { useEffect } from 'react'
-import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Route, Routes } from 'react-router-dom'
 import { BookOpen, MessageSquare, Settings, Library } from 'lucide-react'
 import { useChatStore } from '@/stores/chat'
 import { useLibraryStore } from '@/stores/library'
 import { ToastViewport } from '@/components/Toast'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import ChatPage from '@/pages/ChatPage'
 import LibraryPage from '@/pages/LibraryPage'
 import SettingsPage from '@/pages/SettingsPage'
 
 export default function App() {
-  const location = useLocation()
-  const navigate = useNavigate()
   const loadSessions = useChatStore((s) => s.loadSessions)
   const loadTopics = useLibraryStore((s) => s.loadTopics)
 
@@ -27,13 +27,6 @@ export default function App() {
     })
     void loadTopics().catch(() => {})
   }, [loadSessions, loadTopics])
-
-  // 路由变化时不做事；具体页内 useEffect 处理 query param
-  useEffect(() => {
-    // 占位：保留 hook 以便未来扩展（如埋点）
-    void location
-    void navigate
-  }, [location, navigate])
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
@@ -60,18 +53,29 @@ export default function App() {
       </aside>
 
       <main className="flex-1 overflow-hidden">
-        <Routes>
-          <Route path="/" element={<ChatPage />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/chat/:sessionId" element={<ChatPage />} />
-          <Route path="/library" element={<LibraryPage />} />
-          <Route path="/library/:topicId" element={<LibraryPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<ChatPage />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<ChatPage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat/:sessionId" element={<ChatPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/library/:topicId" element={<LibraryPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
 
       <ToastViewport />
+    </div>
+  )
+}
+
+function NotFound() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+      <h2 className="text-lg font-semibold text-brand-900">页面不存在</h2>
+      <p className="text-sm text-brand-700">请从左侧导航选择功能。</p>
     </div>
   )
 }

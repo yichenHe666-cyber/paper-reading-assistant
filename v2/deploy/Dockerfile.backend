@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+# 核动力科研牛马 v2 — Go 后端镜像。
+#
+# 多阶段构建：builder 编译单二进制，runtime 仅含二进制与 CA 证书，体积小。
+# 安全：以非 root 用户运行；不内嵌源码；数据目录通过卷挂载。
+FROM golang:1.23-alpine AS builder
+
+# 构建参数：版本号写入二进制（便于 health 端点回显）
+ARG VERSION=v2.0.0
+
+WORKDIR /src
+
+# 先拷依赖清单，利用 Docker 层缓存
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+# 拷源码并编译
+# CGO_ENABLED=0：modernc.org/sqlite 是纯 Go，无需 cgo，静态编译便于 scratch/distroless
+COPY backend/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/nuclear-ox-api ./cmd/api
+
+# --- runtime ---
+FROM alpine:3.20 AS runtime
+
+# 安装 CA 证书（HTTPS 调 GitHub/Ollama 需要）与 tzdata（时区）
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -S app && adduser -S -G app app
+
+WORKDIR /app
+COPY --from=builder /out/nuclear-ox-api /app/nuclear-ox-api
+
+# 数据目录：由 docker-compose 挂载命名卷，容器内属主改为 app
+RUN mkdir -p /data && chown -R app:app /data /app
+USER app
+
+ENV NRO_DATA_DIR=/data \
+    TZ=Asia/Shanghai
+
+EXPOSE 8000
+
+# 健康检查：后端 /api/health
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8000/api/health || exit 1
+
+ENTRYPOINT ["/app/nuclear-ox-api"]

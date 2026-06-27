@@ -27,6 +27,12 @@ pub struct EmbeddingClient {
 /// Ollama embedding 响应体。
 #[derive(Debug, Deserialize)]
 struct OllamaEmbeddingResponse {
+    /// 新版 /api/embed 端点返回 `embeddings: [[f32]]`（批量）；
+    /// 旧版 /api/embeddings 返回 `embedding: [f32]`（单条，已废弃）。
+    /// 此处同时兼容两种字段，取首个向量。
+    #[serde(default)]
+    embeddings: Vec<Vec<f32>>,
+    #[serde(default)]
     embedding: Vec<f32>,
 }
 
@@ -41,11 +47,15 @@ struct OpenAIEmbeddingData {
     embedding: Vec<f32>,
 }
 
-/// embedding 请求体（OpenAI 风格，Ollama 也接受 model+prompt 字段名差异在 client 内适配）。
+/// embedding 请求体。
+/// Ollama 新版 /api/embed 用 `input` 字段（兼容批量），旧版 /api/embeddings 用 `prompt`。
+/// 此处发 input+prompt 双字段，新旧端点都能识别。
 #[derive(Debug, Serialize)]
 struct OllamaRequest<'a> {
     model: &'a str,
-    prompt: &'a str,
+    input: &'a str,
+    #[serde(rename = "prompt")]
+    prompt_legacy: &'a str,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,26 +87,57 @@ impl EmbeddingClient {
             "ollama" => self.embed_ollama(text).await,
             "openai" | "openai-compat" => self.embed_openai(text).await,
             _ => {
-                // 未知 provider：尝试 OpenAI 兼容（最通用）
-                self.embed_openai(text).await
+                // 未知 provider 直接报错，避免静默走 OpenAI 兼容路径造成难定位的失败
+                anyhow::bail!(
+                    "未知 embedding provider: {}（支持: ollama / openai / openai-compat）",
+                    self.provider
+                )
             }
         }
     }
 
     async fn embed_ollama(&self, text: &str) -> Result<Vec<f32>> {
+        // Ollama 已用 /api/embed 取代废弃的 /api/embeddings。
+        // 先试新端点，404 时回退旧端点（兼容老版本 Ollama）。
+        let url_new = format!("{}/api/embed", self.api_base.trim_end_matches('/'));
+        let body = OllamaRequest {
+            model: &self.model,
+            input: text,
+            prompt_legacy: text,
+        };
+        let resp = self.http.post(&url_new).json(&body).send().await?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            // 回退旧端点
+            return self.embed_ollama_legacy(text).await;
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            // 截断响应体避免向客户端泄露上游细节
+            let text = resp.text().await.unwrap_or_default();
+            let snippet: String = text.chars().take(200).collect();
+            return Err(anyhow!("Ollama /api/embed 失败 [{}]: {}", status, snippet));
+        }
+        let parsed: OllamaEmbeddingResponse = resp.json().await?;
+        ollama_first_embedding(parsed)
+    }
+
+    /// 旧版 /api/embeddings 端点回退（兼容老版本 Ollama）。
+    async fn embed_ollama_legacy(&self, text: &str) -> Result<Vec<f32>> {
         let url = format!("{}/api/embeddings", self.api_base.trim_end_matches('/'));
         let body = OllamaRequest {
             model: &self.model,
-            prompt: text,
+            input: text,
+            prompt_legacy: text,
         };
         let resp = self.http.post(&url).json(&body).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("Ollama embedding 失败 [{}]: {}", status, text));
+            let snippet: String = text.chars().take(200).collect();
+            return Err(anyhow!("Ollama /api/embeddings 失败 [{}]: {}", status, snippet));
         }
         let parsed: OllamaEmbeddingResponse = resp.json().await?;
-        Ok(parsed.embedding)
+        ollama_first_embedding(parsed)
     }
 
     async fn embed_openai(&self, text: &str) -> Result<Vec<f32>> {
@@ -113,7 +154,8 @@ impl EmbeddingClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("OpenAI embedding 失败 [{}]: {}", status, text));
+            let snippet: String = text.chars().take(200).collect();
+            return Err(anyhow!("OpenAI embedding 失败 [{}]: {}", status, snippet));
         }
         let parsed: OpenAIEmbeddingResponse = resp.json().await?;
         parsed
@@ -123,6 +165,19 @@ impl EmbeddingClient {
             .map(|d| d.embedding)
             .ok_or_else(|| anyhow!("embedding 响应无 data"))
     }
+}
+
+/// 从 Ollama 响应取首个向量，兼容新旧两种字段。
+fn ollama_first_embedding(resp: OllamaEmbeddingResponse) -> Result<Vec<f32>> {
+    if let Some(v) = resp.embeddings.into_iter().next() {
+        if !v.is_empty() {
+            return Ok(v);
+        }
+    }
+    if !resp.embedding.is_empty() {
+        return Ok(resp.embedding);
+    }
+    anyhow::bail!("Ollama embedding 响应为空")
 }
 
 /// 计算两个向量的余弦相似度。

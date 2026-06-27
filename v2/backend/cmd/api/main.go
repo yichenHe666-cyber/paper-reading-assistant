@@ -4,10 +4,11 @@
 //   1. config.Load：加载配置并绝对化数据路径（痛点②修复核心）；
 //   2. store.Open + Migrate：打开 SQLite（绝对路径）并建表；
 //   3. paper.FindLegacyDBs + MigrateLegacyDB：尽力迁移旧版相对路径遗留库（找回历史数据）；
-//   4. server.New + Run：装配 gin 路由并启动 HTTP 服务。
+//   4. server.New + Run：装配 gin 路由并启动 HTTP 服务（带优雅关闭）。
 //
 // 启动后访问 GET /api/health 应返回 data_dir 绝对路径——这是 M1 验收点。
-// SQLite 使用 WAL 模式，进程退出时数据已持久（WAL 自动 checkpoint），无需额外优雅关闭逻辑。
+// 退出路径：Run 收到 SIGINT/SIGTERM 返回 nil 后，defer db.Close() 执行 WAL checkpoint，
+// 数据落盘后再退出，避免 -wal 文件残留。
 package main
 
 import (
@@ -56,7 +57,9 @@ func main() {
 	log.Printf("LLM:      provider=%s model=%s", cfg.LLM.Provider, cfg.LLM.Model)
 	log.Printf("健康检查: GET /api/health")
 
+	// Run 在收到 SIGINT/SIGTERM 后优雅关闭返回 nil；
+	// 失败时用 log.Fatalf 会跳过 defer db.Close，故仅启动期 fatal，运行期错误走正常退出
 	if err := srv.Run(); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
+		log.Printf("服务退出: %v", err)
 	}
 }

@@ -271,11 +271,22 @@ function MessageInput({ sessionId, disabled, onSend }: MessageInputProps) {
   const [text, setText] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
+  // 组件卸载或切换会话时中断在途 SSE，避免：
+  //   1. 后端 agent loop + LLM 调用继续空跑烧 token（资源泄漏）；
+  //   2. 已卸载组件 setState 触发 React 警告/错乱。
+  // 依赖 sessionId：切换会话即视为旧流不再需要。
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+    }
+  }, [sessionId])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const content = text.trim()
     if (!content || disabled) return
-    // 接住流式 controller，供"停止"按钮中断
+    // 接住流式 controller，供"停止"按钮或卸载清理中断
     abortRef.current = onSend(content)
     setText('')
   }

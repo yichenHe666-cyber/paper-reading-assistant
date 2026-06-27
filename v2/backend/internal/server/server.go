@@ -43,9 +43,16 @@
 package server
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -162,8 +169,50 @@ func (s *Server) buildRouter() *gin.Engine {
 // gin.Engine 实现了 http.Handler 接口（ServeHTTP）。
 func (s *Server) Handler() http.Handler { return s.router }
 
-// Run 启动 HTTP 服务，阻塞直至出错。
+// Run 启动 HTTP 服务，阻塞直至收到 SIGINT/SIGTERM 或出错。
+//
+// 与 router.Run 的区别（修复审查发现的高危项）：
+//   - 自建 http.Server 并设置 ReadHeaderTimeout/IdleTimeout，防慢速攻击；
+//   - WriteTimeout 设较长（300s）以兼容 SSE 长连接（agent loop 最多 8 轮×90s）；
+//   - 监听 SIGINT/SIGTERM，收到后给 15s 优雅关闭窗口排空在途请求；
+//   - 正常退出时执行 db.Close 与 WAL checkpoint，避免 -wal 文件残留。
 func (s *Server) Run() error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port)
-	return s.router.Run(addr)
+	// ReadHeaderTimeout 防 slowloris；WriteTimeout 兼容 SSE 长连接；IdleTimeout 回收空闲连接
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           s.router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      300 * time.Second, // SSE 单连接最长 5 分钟
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// 信号监听：SIGINT/SIGTERM 触发优雅关闭
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Printf("HTTP 服务监听 %s", addr)
+		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-quit:
+		log.Printf("收到退出信号，开始优雅关闭（最长等待 15s）...")
+		// 给在途请求 15s 排空；SSE 长连接会被 ctx 取消，agent loop 收到 ctx 取消后落库已累积内容
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("优雅关闭超时: %v", err)
+			return err
+		}
+		log.Printf("已优雅关闭")
+		return nil
+	}
 }

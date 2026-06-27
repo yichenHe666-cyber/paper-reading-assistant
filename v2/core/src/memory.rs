@@ -43,6 +43,7 @@ impl MemoryLayer {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "episodic" => Some(Self::Episodic),
@@ -186,10 +187,10 @@ impl MemoryEngine {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(sql)?;
             let rows: Result<Vec<Memory>, rusqlite::Error> = if limit > 0 {
-                stmt.query_map(params![layer.as_str(), limit], |row| row_to_memory(row))?
+                stmt.query_map(params![layer.as_str(), limit], row_to_memory)?
                     .collect()
             } else {
-                stmt.query_map(params![layer.as_str()], |row| row_to_memory(row))?
+                stmt.query_map(params![layer.as_str()], row_to_memory)?
                     .collect()
             };
             Ok(rows?)
@@ -205,7 +206,7 @@ impl MemoryEngine {
                  FROM memories WHERE content LIKE ? ORDER BY importance_score DESC LIMIT ?",
             )?;
             let rows: Result<Vec<Memory>, rusqlite::Error> = stmt
-                .query_map(params![pat, limit], |row| row_to_memory(row))?
+                .query_map(params![pat, limit], row_to_memory)?
                 .collect();
             Ok(rows?)
         })
@@ -213,33 +214,65 @@ impl MemoryEngine {
 
     /// 向量相似度检索（brute-force cosine）。
     ///
-    /// 流程：对查询文本生成 embedding → 扫描 memory_vectors 全表 → 计算余弦相似度 → 取 top_k。
+    /// 流程：对查询文本生成 embedding → 单条 JOIN SQL 一次取回记忆+向量 →
+    /// 计算余弦相似度 → 取 top_k。
+    ///
+    /// 实现说明（修复审查发现的 N+1 查询）：原实现对每个候选向量单独 `self.get(&mid)`
+    /// 查询记忆，1 万条向量产生 1 万次锁获取+SELECT。现改为一条 JOIN 一次取回，
+    /// 仅在内存中做 cosine 计算与排序，锁竞争与延迟降低一个数量级。
     /// 小规模记忆（<1万条）足够；后续可换 sqlite-vss 或外挂 Qdrant。
     pub async fn search_by_vector(&self, query: &str, top_k: usize) -> Result<Vec<SimilarMemory>> {
         let qvec = self.embedder.embed(query).await?;
-        let candidates: Vec<(String, String, Vec<f32>)> = self.db.with_conn(|conn| {
-            let mut stmt = conn.prepare("SELECT id, memory_id, vector FROM memory_vectors")?;
-            let rows: Result<Vec<(String, String, Vec<f32>)>, rusqlite::Error> = stmt
+        // 单条 JOIN：memory_vectors ⨝ memories，一次取回全部候选
+        let rows: Vec<(Memory, Vec<f32>)> = self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT m.id, m.layer, m.content, m.importance_score, m.decay_state, m.embedding_id, m.created_at, mv.vector
+                 FROM memory_vectors mv
+                 JOIN memories m ON m.id = mv.memory_id
+                 WHERE m.decay_state != 'decaying'",
+            )?;
+            let rows: Vec<(Memory, Vec<f32>)> = stmt
                 .query_map([], |row| {
-                    let id: String = row.get(0)?;
-                    let mid: String = row.get(1)?;
-                    let v_json: String = row.get(2)?;
+                    let v_json: String = row.get(7)?;
                     let v: Vec<f32> = serde_json::from_str(&v_json).unwrap_or_default();
-                    Ok((id, mid, v))
+                    if v.is_empty() {
+                        // 向量缺失/损坏：跳过，避免 cosine 误返回 0
+                        return Err(rusqlite::Error::FromSqlConversionFailure(
+                            7,
+                            rusqlite::types::Type::Text,
+                            "空向量".into(),
+                        ));
+                    }
+                    Ok((
+                        Memory {
+                            id: row.get(0)?,
+                            layer: row.get(1)?,
+                            content: row.get(2)?,
+                            importance_score: row.get(3)?,
+                            decay_state: row.get(4)?,
+                            embedding_id: row.get(5).unwrap_or_default(),
+                            created_at: row.get(6)?,
+                        },
+                        v,
+                    ))
                 })?
+                .filter_map(|r| r.ok())
                 .collect();
-            // 显式标注错误类型，避免 anyhow::Error 的 From 推断歧义
-            Ok::<_, rusqlite::Error>(rows?)
+            Ok::<_, rusqlite::Error>(rows)
         })?;
 
-        let mut scored: Vec<SimilarMemory> = Vec::new();
-        for (_vid, mid, v) in candidates {
-            let sim = cosine_similarity(&qvec, &v) as f64;
-            if let Ok(Some(m)) = self.get(&mid) {
-                scored.push(SimilarMemory { memory: m, similarity: sim });
-            }
-        }
-        scored.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        let mut scored: Vec<SimilarMemory> = rows
+            .into_iter()
+            .map(|(m, v)| {
+                let sim = cosine_similarity(&qvec, &v) as f64;
+                SimilarMemory { memory: m, similarity: sim }
+            })
+            .collect();
+        scored.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(top_k);
         Ok(scored)
     }
@@ -316,9 +349,9 @@ impl MemoryEngine {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(sql)?;
             let rows: Result<Vec<DecisionEntry>, rusqlite::Error> = if limit > 0 {
-                stmt.query_map(params![limit], |row| row_to_decision(row))?.collect()
+                stmt.query_map(params![limit], row_to_decision)?.collect()
             } else {
-                stmt.query_map([], |row| row_to_decision(row))?.collect()
+                stmt.query_map([], row_to_decision)?.collect()
             };
             Ok(rows?)
         })

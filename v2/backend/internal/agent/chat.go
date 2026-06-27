@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync/atomic"
 
@@ -129,7 +130,7 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID, userContent st
 
 	// 5. 转发 + 累积 + 落库
 	out := make(chan StreamEvent, 32)
-	go s.tapAndPersist(sessionID, in, out, injectedSlugs)
+	go s.tapAndPersist(ctx, sessionID, in, out, injectedSlugs)
 	return out, nil
 }
 
@@ -137,11 +138,12 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID, userContent st
 // channel 关闭后落库 assistant 消息并触发自进化。
 //
 // 流式异常落库核心：用 defer recover 兜底 panic；无论 done/error 都尝试落库累积内容。
-func (s *ChatService) tapAndPersist(sessionID string, in <-chan StreamEvent, out chan<- StreamEvent, injectedSlugs []string) {
+// ctx 感知：消费方（SSE 客户端）断开时 ctx 取消，转发用 select+ctx.Done 避免阻塞泄漏。
+func (s *ChatService) tapAndPersist(ctx context.Context, sessionID string, in <-chan StreamEvent, out chan<- StreamEvent, injectedSlugs []string) {
 	defer func() {
 		if r := recover(); r != nil {
 			// panic 不抛到 HTTP 层；落库已知内容并发 error 事件
-			safeSend(out, newErrorEvent(0, fmt.Sprintf("agent 内部错误: %v", r)))
+			safeSendCtx(ctx, out, newErrorEvent(0, fmt.Sprintf("agent 内部错误: %v", r)))
 		}
 		close(out)
 	}()
@@ -171,8 +173,14 @@ func (s *ChatService) tapAndPersist(sessionID string, in <-chan StreamEvent, out
 			hadError = true
 			errMsg = ev.Content
 		}
-		// 转发给 SSE handler
-		safeSend(out, ev)
+		// 转发给 SSE handler：ctx 感知，客户端断开时不再阻塞
+		if !safeSendCtx(ctx, out, ev) {
+			// 客户端已断开，停止转发但继续累积已收到的事件
+			// （drain in 防止上游 Run goroutine 阻塞）
+			for range in {
+			}
+			break
+		}
 	}
 
 	// 6. 落库 assistant 消息（流式异常落库）
@@ -188,13 +196,16 @@ func (s *ChatService) tapAndPersist(sessionID string, in <-chan StreamEvent, out
 		if lastUsage != nil {
 			tokens = lastUsage.TotalTokens
 		}
-		_ = store.AppendMessage(s.db, store.Message{
+		// 落库失败记录日志而非静默吞掉（spec：流式异常落库是核心保障）
+		if err := store.AppendMessage(s.db, store.Message{
 			ID:        assistantMsgID,
 			SessionID: sessionID,
 			Role:      "assistant",
 			Content:   content,
 			TokenCount: tokens,
-		})
+		}); err != nil {
+			log.Printf("[chat] 流式 assistant 消息落库失败 session=%s: %v", sessionID, err)
+		}
 	}
 
 	// 7. 更新技能用量（注入即视为参与本次任务）
@@ -283,4 +294,17 @@ func parseEnabledSlugs(s string) []string {
 func safeSend(ch chan<- StreamEvent, ev StreamEvent) {
 	defer func() { _ = recover() }()
 	ch <- ev
+}
+
+// safeSendCtx 是 ctx 感知版本：客户端断开导致 out 缓冲满时，通过 ctx.Done 提前返回，
+// 避免 tapAndPersist goroutine 永久阻塞在发送上（与 loop.go 的 sendCtx 配合彻底消除泄漏）。
+// 返回 false 表示 ctx 已取消，调用方应停止转发。
+func safeSendCtx(ctx context.Context, ch chan<- StreamEvent, ev StreamEvent) bool {
+	defer func() { _ = recover() }()
+	select {
+	case ch <- ev:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }

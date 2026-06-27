@@ -120,17 +120,29 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) <-chan StreamEv
 		history := make([]llm.Message, len(messages))
 		copy(history, messages)
 
+		// sendCtx 向 ch 发送事件，消费方停止读取（SSE 客户端断开）时通过 ctx 取消，
+		// 避免 Run goroutine 永久阻塞在发送上导致 goroutine 泄漏。
+		// 返回 false 表示 ctx 已取消，调用方应 return。
+		sendCtx := func(ev StreamEvent) bool {
+			select {
+			case ch <- ev:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
+
 		totalTokens := 0
 		turn := 0
 		for turn < a.maxTurns {
 			// 检查上层取消
 			if err := ctx.Err(); err != nil {
-				ch <- newErrorEvent(turn, "agent 被取消: "+err.Error())
+				sendCtx(newErrorEvent(turn, "agent 被取消: "+err.Error()))
 				return
 			}
 			// 检查 token 预算
 			if a.tokenBudget > 0 && totalTokens >= a.tokenBudget {
-				ch <- newErrorEvent(turn, fmt.Sprintf("token 预算耗尽（已用 %d/%d）", totalTokens, a.tokenBudget))
+				sendCtx(newErrorEvent(turn, fmt.Sprintf("token 预算耗尽（已用 %d/%d）", totalTokens, a.tokenBudget)))
 				return
 			}
 
@@ -138,18 +150,26 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) <-chan StreamEv
 			resp, err := a.callOnce(ctx, history)
 			if err != nil {
 				// 错误事件携带当前轮次，便于排查"第几轮崩的"
-				ch <- newErrorEvent(turn, err.Error())
+				sendCtx(newErrorEvent(turn, err.Error()))
 				return
 			}
 
 			// 累计 token 用量并 emit
 			totalTokens += resp.Usage.TotalTokens
-			ch <- newUsageEvent(Usage{
+			if !sendCtx(newUsageEvent(Usage{
 				PromptTokens: resp.Usage.PromptTokens,
 				CompletionTokens: resp.Usage.CompletionTokens,
 				TotalTokens: resp.Usage.TotalTokens,
-			})
+			})) {
+				return
+			}
 
+			// 防御空 choices：LLM 返回 200 但 choices 为空（内容过滤/异常响应）时
+			// 不能越界 panic——该 goroutine 无 recover，panic 会崩溃整个进程。
+			if len(resp.Choices) == 0 {
+				sendCtx(newErrorEvent(turn, "LLM 返回空 choices（可能触发内容过滤）"))
+				return
+			}
 			choice := resp.Choices[0]
 			assistantMsg := choice.Message
 			// 追加 assistant 消息到历史（含 tool_calls，模型下一轮会看到自己的调用记录）
@@ -157,21 +177,25 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) <-chan StreamEv
 
 			// 无工具调用 → 最终回答：分块 emit token + done
 			if len(assistantMsg.ToolCalls) == 0 {
-				a.emitTokens(ch, assistantMsg.Content)
-				ch <- newDoneEvent(turn)
+				a.emitTokensCtx(ctx, ch, sendCtx, assistantMsg.Content)
+				sendCtx(newDoneEvent(turn))
 				return
 			}
 
 			// 有工具调用：逐个执行，emit tool_call/tool_result，append tool 消息
 			for _, tc := range assistantMsg.ToolCalls {
-				ch <- newToolCallEvent(tc.ID, tc.Function.Name, tc.Function.Arguments)
+				if !sendCtx(newToolCallEvent(tc.ID, tc.Function.Name, tc.Function.Arguments)) {
+					return
+				}
 
 				result, execErr := a.execTool(ctx, tc.Function.Name, tc.Function.Arguments)
 				// 执行失败也回传给模型（JSON 错误体），让模型自行决定重试或换方案
 				if execErr != nil {
 					result = fmt.Sprintf(`{"error":"%s"}`, escapeJSONString(execErr.Error()))
 				}
-				ch <- newToolResultEvent(tc.ID, tc.Function.Name, result)
+				if !sendCtx(newToolResultEvent(tc.ID, tc.Function.Name, result)) {
+					return
+				}
 
 				// append tool 角色消息：role=tool，content=结果，tool_call_id 匹配
 				history = append(history, llm.Message{
@@ -184,7 +208,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) <-chan StreamEv
 		}
 
 		// 达到 maxTurns 仍未给出最终回答
-		ch <- newErrorEvent(turn, fmt.Sprintf("达到最大轮数 %d 仍未完成", a.maxTurns))
+		sendCtx(newErrorEvent(turn, fmt.Sprintf("达到最大轮数 %d 仍未完成", a.maxTurns)))
 	}()
 
 	return ch
@@ -243,6 +267,15 @@ func (a *Agent) execTool(ctx context.Context, name, argsJSON string) (string, er
 // emitTokens 将最终回答内容分块 emit 为多个 token 事件，模拟流式体验。
 // 按换行符分块；无换行则整段一次 emit。
 func (a *Agent) emitTokens(ch chan<- StreamEvent, content string) {
+	a.emitTokensCtx(context.Background(), ch, func(ev StreamEvent) bool {
+		ch <- ev
+		return true
+	}, content)
+}
+
+// emitTokensCtx 是 ctx 感知版本：消费方停止读取时通过 sendCtx 返回 false 提前终止，
+// 避免 Run goroutine 阻塞在 token 发送上导致泄漏。
+func (a *Agent) emitTokensCtx(ctx context.Context, ch chan<- StreamEvent, send func(StreamEvent) bool, content string) {
 	if content == "" {
 		return
 	}
@@ -252,7 +285,9 @@ func (a *Agent) emitTokens(ch chan<- StreamEvent, content string) {
 		if p == "" {
 			continue
 		}
-		ch <- newTokenEvent(p)
+		if !send(newTokenEvent(p)) {
+			return
+		}
 	}
 }
 
