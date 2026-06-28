@@ -8,19 +8,22 @@
 
 import type {
   ApiError,
+  ClassifyResponse,
+  EvolveResult,
   HealthInfo,
+  ListPapersResponse,
   Message,
-  MigrateLegacyResponse,
   Paper,
+  PaperDetail,
+  PaperFilter,
+  ReadStatus,
   Session,
   Skill,
-  StreamEvent,
-  SyncResult,
-  Topic,
-  SendMessageResponse,
-  EvolveResult,
-  ReadStatus,
   SkillMode,
+  Source,
+  StreamEvent,
+  SendMessageResponse,
+  SyncResult,
 } from './types'
 
 // API 基地址：优先用 VITE_API_BASE，缺省走相对路径（dev 由 vite proxy 转发）。
@@ -86,31 +89,73 @@ export function getHealth(): Promise<HealthInfo> {
   return request<HealthInfo>('GET', '/api/health')
 }
 
-// --- 主题与论文 ---
-export function listTopics(): Promise<Topic[]> {
-  return request<Topic[]>('GET', '/api/topics')
+// --- 论文检索/阅读/分类 ---
+
+// listPapers 按过滤条件分页列出论文。filter 字段作为 query string 传递，空值不传。
+export function listPapers(filter: PaperFilter = {}): Promise<ListPapersResponse> {
+  const params = new URLSearchParams()
+  if (filter.source) params.set('source', filter.source)
+  if (filter.level) params.set('level', filter.level)
+  if (filter.sub_domain) params.set('sub_domain', filter.sub_domain)
+  if (filter.paper_type) params.set('paper_type', filter.paper_type)
+  if (filter.q) params.set('q', filter.q)
+  if (filter.page) params.set('page', String(filter.page))
+  if (filter.page_size) params.set('page_size', String(filter.page_size))
+  const qs = params.toString()
+  const path = qs ? `/api/papers?${qs}` : '/api/papers'
+  return request<ListPapersResponse>('GET', path)
 }
 
-export function listPapers(topicId: string): Promise<Paper[]> {
-  return request<Paper[]>(`GET`, `/api/topics/${encodeURIComponent(topicId)}/papers`)
+// getPaper 查询单篇论文详情（含阅读历史统计）。
+export function getPaper(id: string): Promise<PaperDetail> {
+  return request<PaperDetail>('GET', `/api/papers/${encodeURIComponent(id)}`)
 }
 
-export function getPaper(id: string): Promise<Paper> {
-  return request<Paper>('GET', `/api/papers/${encodeURIComponent(id)}`)
+// paperPDFURL 返回论文 PDF 的代理流地址，供 <iframe src>/<embed src> 直接使用。
+// 不发起请求——PDF 由浏览器直接拉取渲染，前端不要 fetch 解析（避免 blob 编码问题）。
+export function paperPDFURL(id: string): string {
+  return `${API_BASE}/api/papers/${encodeURIComponent(id)}/pdf`
 }
 
+// getRelatedPapers 返回与指定论文 sub_domain 相同的相关论文（后端取前 10 篇）。
+export function getRelatedPapers(id: string): Promise<Paper[]> {
+  return request<Paper[]>('GET', `/api/papers/${encodeURIComponent(id)}/related`)
+}
+
+// updatePaperStatus 更新论文阅读状态（unread/reading/done/reread）。
 export function updatePaperStatus(id: string, status: ReadStatus): Promise<{ id: string; status: ReadStatus }> {
   return request('PATCH', `/api/papers/${encodeURIComponent(id)}/status`, { status })
 }
 
-// --- 同步与迁移 ---
-export function syncPapers(owner?: string, repo?: string): Promise<SyncResult> {
-  const body = owner || repo ? { owner, repo } : undefined
-  return request<SyncResult>('POST', '/api/sync', body)
+// startReading 开始阅读：创建 reading_history 记录并把论文状态置为 reading。
+export function startReading(id: string): Promise<{ history_id: string }> {
+  return request<{ history_id: string }>('POST', `/api/papers/${encodeURIComponent(id)}/reading-start`)
 }
 
-export function migrateLegacy(): Promise<MigrateLegacyResponse> {
-  return request<MigrateLegacyResponse>('POST', '/api/migrate-legacy')
+// endReading 结束阅读：更新 reading_history 的 end_time/duration 与 papers 阅读统计。
+export function endReading(id: string, historyId: string): Promise<{ history_id: string; paper_id: string }> {
+  return request<{ history_id: string; paper_id: string }>(
+    'POST',
+    `/api/papers/${encodeURIComponent(id)}/reading-end`,
+    { history_id: historyId },
+  )
+}
+
+// classifyPaper 触发 AI 难度分类。paperId 省略时走全量分类，返回已分类条数。
+export function classifyPaper(paperId?: string): Promise<ClassifyResponse> {
+  return request<ClassifyResponse>('POST', '/api/papers/classify', { paper_id: paperId ?? '' })
+}
+
+// --- 数据源管理 ---
+
+// listSources 列出所有数据源及同步状态。
+export function listSources(): Promise<Source[]> {
+  return request<Source[]>('GET', '/api/sources')
+}
+
+// syncSources 触发数据源同步。source 指定时单源同步，省略（空串）时全量同步。
+export function syncSources(source?: string): Promise<{ results: SyncResult[] }> {
+  return request<{ results: SyncResult[] }>('POST', '/api/sources/sync', { source: source ?? '' })
 }
 
 // --- 会话 ---

@@ -8,12 +8,16 @@
 //
 // 路由清单（前缀 /api）：
 //   GET   /health                       健康检查（M1 验收：返回数据目录绝对路径）
-//   GET   /topics                       列出全部主题
-//   GET   /topics/:id/papers            列出某主题下论文
-//   GET   /papers/:id                   查询单篇论文
+//   GET   /papers                       列出论文（支持 source/level/sub_domain/paper_type/q 过滤与分页）
+//   GET   /papers/:id                   查询论文详情（含阅读历史统计）
+//   GET   /papers/:id/pdf               代理拉取论文 PDF 流
+//   GET   /papers/:id/related           按 sub_domain 返回相关论文（前 10 篇）
 //   PATCH /papers/:id/status            更新论文阅读状态
-//   POST  /sync                         触发 GitHub 仓库同步
-//   POST  /migrate-legacy               触发旧库迁移（找回历史数据）
+//   POST  /papers/:id/reading-start     开始阅读（创建 reading_history 记录）
+//   POST  /papers/:id/reading-end       结束阅读（更新 reading_history 与阅读统计）
+//   POST  /papers/classify              触发 AI 难度分类（单篇或全量）
+//   GET   /sources                      列出所有数据源及状态
+//   POST  /sources/sync                 触发数据源同步（单源或全部）
 //   POST  /chat/sessions                新建会话（M2）
 //   GET   /chat/sessions                列出会话（M2）
 //   GET   /chat/sessions/:id            查询会话详情（M2）
@@ -51,6 +55,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -65,15 +70,16 @@ import (
 
 // Server 是后端 HTTP 服务。持有各层依赖，构造后调用 Run 启动。
 type Server struct {
-	cfg     *config.Config      // 全局配置
-	db      *sql.DB             // 数据库连接（供技能等 handler 直接查询）
-	repo    *paper.Repository   // 论文/主题数据访问
-	llm     *llm.Client         // LLM 客户端
-	github  *paper.GitHubClient // GitHub 同步客户端
-	chat    *agent.ChatService  // 会话编排服务（M2）
-	evolver *agent.Evolver      // 自进化器（M2，供手动触发端点使用）
-	memory  *memory.Client      // Rust core 记忆/梦境客户端（M4）
-	router  *gin.Engine         // gin 路由引擎
+	cfg        *config.Config        // 全局配置
+	db         *sql.DB               // 数据库连接（供技能等 handler 直接查询）
+	repo       *paper.Repository     // 论文/主题数据访问
+	llm        *llm.Client           // LLM 客户端
+	sourceMgr  *paper.SourceManager  // 论文数据源管理器（arXiv/OpenAlex/ACL/Company）
+	classifier *paper.AIClassifier   // AI 难度分类器
+	chat       *agent.ChatService    // 会话编排服务（M2）
+	evolver    *agent.Evolver        // 自进化器（M2，供手动触发端点使用）
+	memory     *memory.Client        // Rust core 记忆/梦境客户端（M4）
+	router     *gin.Engine           // gin 路由引擎
 }
 
 // New 依据 config 与已打开的 db 构造 Server。
@@ -88,7 +94,6 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 		db:     db,
 		repo:   paper.NewRepository(db),
 		llm:    llm.New(cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIBase, cfg.LLM.APIKey, cfg.LLM.Timeout),
-		github: paper.NewGitHubClient(cfg.GitHub.Token),
 		// M4：Rust core HTTP 客户端（记忆/梦境/向量）。core 可能未启动，
 		// 此处不探测连接，由实际请求时的 502 错误暴露（懒连接）。
 		memory: memory.New(cfg.Core.BaseURL, cfg.Core.Timeout),
@@ -97,6 +102,15 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	s.llm.SetRecorder(llm.NewDBRecorder(db))
 	// 注入响应缓存：相同请求命中 llm_cache 表，替代 Redis
 	s.llm.SetCache(llm.NewCache(db))
+
+	// --- 论文数据源管理器：注册 arXiv/OpenAlex/ACL/Company 全部 adapter ---
+	s.sourceMgr = paper.NewSourceManager(s.repo)
+	s.sourceMgr.Register(paper.NewArxivSourceWithMax(cfg.PaperSource.ArxivMaxResults))
+	s.sourceMgr.Register(paper.NewOpenAlexSource(cfg.PaperSource.OpenAlexMailto, nil, 0))
+	s.sourceMgr.Register(paper.NewACLAnthologySource())
+	s.sourceMgr.Register(paper.NewCompanySource(cfg.PaperSource.GitHubToken))
+	// AI 难度分类器
+	s.classifier = paper.NewAIClassifier(s.llm)
 
 	// --- M2 装配：工具 → agent loop → 技能 → 自进化 → 会话服务 ---
 	// 工具注册表：内置 list_topics / search_papers / get_paper
@@ -115,25 +129,34 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	return s
 }
 
-// setGitHubClient 替换 GitHub 客户端。供测试注入 mock baseURL 客户端。
-func (s *Server) setGitHubClient(c *paper.GitHubClient) { s.github = c }
+// setSourceManager 替换源管理器。供测试注入 mock 源。
+func (s *Server) setSourceManager(m *paper.SourceManager) { s.sourceMgr = m }
 
 // buildRouter 注册全部路由。返回 gin.Engine。
 func (s *Server) buildRouter() *gin.Engine {
 	r := gin.New()
 	// Recovery 中间件：捕获 panic 返回 500，避免单请求崩溃整个进程
-	r.Use(gin.Recovery())
+	// requestLogger：轻量请求日志，仅记录 /api/ 路径，按状态码分级
+	r.Use(gin.Recovery(), requestLogger())
 
 	api := r.Group("/api")
 	{
-		// --- M1：论文/主题/健康 ---
+		// --- 健康检查 ---
 		api.GET("/health", s.getHealth)
-		api.GET("/topics", s.listTopics)
-		api.GET("/topics/:id/papers", s.listPapers)
+
+		// --- 论文检索/阅读/分类 ---
+		api.GET("/papers", s.listPapers)
 		api.GET("/papers/:id", s.getPaper)
+		api.GET("/papers/:id/pdf", s.proxyPaperPDF)
+		api.GET("/papers/:id/related", s.getRelatedPapers)
 		api.PATCH("/papers/:id/status", s.updatePaperStatus)
-		api.POST("/sync", s.syncPapers)
-		api.POST("/migrate-legacy", s.migrateLegacy)
+		api.POST("/papers/:id/reading-start", s.startReading)
+		api.POST("/papers/:id/reading-end", s.endReading)
+		api.POST("/papers/classify", s.classifyPaper)
+
+		// --- 数据源管理 ---
+		api.GET("/sources", s.listSources)
+		api.POST("/sources/sync", s.syncSources)
 
 		// --- M2：会话与流式对话 ---
 		api.POST("/chat/sessions", s.createSession)
@@ -163,6 +186,27 @@ func (s *Server) buildRouter() *gin.Engine {
 		api.GET("/memory/decisions", s.listDecisions)
 	}
 	return r
+}
+
+// requestLogger 是轻量请求日志中间件。
+// 仅记录 /api/ 路径（忽略静态资源），按状态码区分 INFO/WARN 级别，
+// 不记录请求体以避免泄露敏感信息。格式：[HTTP] [LEVEL] METHOD PATH STATUS ELAPSED。
+func requestLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		// 只记录 /api/ 路径，静态资源不记
+		if !strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			return
+		}
+		elapsed := time.Since(start)
+		status := c.Writer.Status()
+		if status >= 400 {
+			log.Printf("[HTTP] [WARN] %s %s %d %v", c.Request.Method, c.Request.URL.Path, status, elapsed)
+		} else {
+			log.Printf("[HTTP] [INFO] %s %s %d %v", c.Request.Method, c.Request.URL.Path, status, elapsed)
+		}
+	}
 }
 
 // Handler 返回底层 http.Handler，供 httptest 测试使用。
@@ -195,6 +239,9 @@ func (s *Server) Run() error {
 	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("HTTP 服务监听 %s", addr)
+		log.Printf("[BOOT] 数据目录=%s 数据库=%s", s.cfg.DataDir, s.cfg.DBPath)
+		log.Printf("[BOOT] 已注册 %d 个论文数据源", len(s.sourceMgr.ListSources()))
+		log.Printf("[BOOT] LLM=%s/%s", s.cfg.LLM.Provider, s.cfg.LLM.Model)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

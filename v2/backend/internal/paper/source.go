@@ -38,12 +38,14 @@ type PaperSource interface {
 }
 
 // SyncResult 记录单个源的同步结果。
+// JSON tag 必须为 snake_case，与前端 types.ts 对齐。
+// Duration 是 time.Duration（int64 纳秒），JSON 序列化为整数；前端按需换算。
 type SyncResult struct {
-	SourceID string
-	Success  bool
-	Count    int
-	Error    string
-	Duration time.Duration
+	SourceID string        `json:"source_id"`
+	Success  bool          `json:"success"`
+	Count    int           `json:"count"`
+	Error    string        `json:"error"`
+	Duration time.Duration `json:"duration"`
 }
 
 // SourceManager 管理多个数据源。
@@ -65,6 +67,9 @@ func (m *SourceManager) Register(source PaperSource) {
 
 // SyncAll 并发同步所有源，单源失败不影响其他源。
 func (m *SourceManager) SyncAll(ctx context.Context) []SyncResult {
+	syncAllStart := time.Now()
+	log.Printf("[SYNC] [INFO] SyncAll 启动，共 %d 个源", len(m.sources))
+
 	var wg sync.WaitGroup
 	results := make([]SyncResult, len(m.sources))
 
@@ -109,8 +114,10 @@ func (m *SourceManager) SyncAll(ctx context.Context) []SyncResult {
 				count++
 			}
 
-			// 更新 sources 表
-			m.repo.UpdateSourceSync(source.ID(), len(metas))
+			// 更新 sources 表（失败仅记日志，不阻断——论文已写入 papers 表，仅 sources 状态未刷新）
+			if err := m.repo.UpdateSourceSync(source.ID(), len(metas)); err != nil {
+				log.Printf("[%s] [WARN] UpdateSourceSync 失败: %v", source.ID(), err)
+			}
 
 			results[idx] = SyncResult{
 				SourceID: source.ID(),
@@ -123,6 +130,19 @@ func (m *SourceManager) SyncAll(ctx context.Context) []SyncResult {
 	}
 
 	wg.Wait()
+
+	// 汇总统计
+	successCount, totalCount := 0, 0
+	for _, r := range results {
+		if r.Success {
+			successCount++
+			totalCount += r.Count
+		}
+	}
+	failedCount := len(results) - successCount
+	log.Printf("[SYNC] [INFO] SyncAll 完成: 成功 %d / 失败 %d / 新增 %d 篇 / 耗时 %v",
+		successCount, failedCount, totalCount, time.Since(syncAllStart))
+
 	return results
 }
 
@@ -130,9 +150,11 @@ func (m *SourceManager) SyncAll(ctx context.Context) []SyncResult {
 func (m *SourceManager) SyncOne(ctx context.Context, sourceID string) (*SyncResult, error) {
 	for _, src := range m.sources {
 		if src.ID() == sourceID {
+			log.Printf("[%s] [INFO] SyncOne 启动", sourceID)
 			start := time.Now()
 			metas, err := src.Sync(ctx)
 			if err != nil {
+				log.Printf("[%s] [ERROR] SyncOne 失败: %v", sourceID, err)
 				return &SyncResult{
 					SourceID: sourceID,
 					Success:  false,
@@ -143,11 +165,16 @@ func (m *SourceManager) SyncOne(ctx context.Context, sourceID string) (*SyncResu
 			count := 0
 			for _, meta := range metas {
 				if err := m.repo.UpsertPaperMeta(meta); err != nil {
+					log.Printf("[%s] [WARN] upsert failed for %s: %v", sourceID, meta.Title, err)
 					continue
 				}
 				count++
 			}
-			m.repo.UpdateSourceSync(sourceID, len(metas))
+			// 更新 sources 表（失败仅记日志，不阻断——论文已写入 papers 表，仅 sources 状态未刷新）
+			if err := m.repo.UpdateSourceSync(sourceID, len(metas)); err != nil {
+				log.Printf("[%s] [WARN] UpdateSourceSync 失败: %v", sourceID, err)
+			}
+			log.Printf("[%s] [INFO] SyncOne 完成: 新增 %d 篇 / 耗时 %v", sourceID, count, time.Since(start))
 			return &SyncResult{
 				SourceID: sourceID,
 				Success:  true,

@@ -28,10 +28,10 @@ type Config struct {
 	LogDir    string // 日志目录（绝对路径）
 	BackupDir string // 备份目录（绝对路径）
 
-	Server  ServerConfig  // HTTP 服务配置
-	LLM     LLMConfig     // LLM provider 配置
-	GitHub  GitHubConfig  // GitHub 数据源配置
-	Core    CoreConfig    // Rust core 服务配置（向量化/记忆/梦境，spec §5）
+	Server      ServerConfig      // HTTP 服务配置
+	LLM         LLMConfig         // LLM provider 配置
+	PaperSource PaperSourceConfig // 论文数据源配置（arXiv/OpenAlex/ACL/Company）
+	Core        CoreConfig        // Rust core 服务配置（向量化/记忆/梦境，spec §5）
 }
 
 // ServerConfig 描述 HTTP 监听参数。
@@ -53,10 +53,12 @@ type LLMConfig struct {
 	DailyBudgetUSD float64 // 每日 LLM 预算上限（美元）
 }
 
-// GitHubConfig 描述论文数据源（Papers We Love 仓库）配置。
-type GitHubConfig struct {
-	Token       string // GitHub Personal Access Token（空则匿名访问，受 60/hour 限流）
-	DefaultRepo string // 默认同步仓库，格式 "owner/repo"，如 papers-we-love/papers-we-love
+// PaperSourceConfig 描述论文数据源（arXiv/OpenAlex/ACL/Company）配置。
+type PaperSourceConfig struct {
+	ArxivMaxResults int    // arXiv 每分类拉取数量（默认 50）
+	OpenAlexMailto  string // OpenAlex polite pool 邮箱（建议配置以获得更高速率）
+	GitHubToken     string // GitHub Token（公司源 GitHub 维度用，空则匿名访问受 60/hour 限流）
+	SeedPapersPath  string // 种子论文文件路径（预留）
 }
 
 // CoreConfig 描述 Rust core 服务（向量化/记忆引擎/梦境整合）的连接配置。
@@ -87,9 +89,11 @@ func Load() (*Config, error) {
 			OllamaURL:      getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 			DailyBudgetUSD: getEnvFloat("DAILY_LLM_BUDGET_USD", 3.0),
 		},
-		GitHub: GitHubConfig{
-			Token:       getEnv("GITHUB_TOKEN", ""),
-			DefaultRepo: getEnv("DEFAULT_GITHUB_REPO", "papers-we-love/papers-we-love"),
+		PaperSource: PaperSourceConfig{
+			ArxivMaxResults: getEnvInt("ARXIV_MAX_RESULTS", 50),
+			OpenAlexMailto:  getEnv("OPENALEX_MAILTO", ""),
+			GitHubToken:     getEnv("GITHUB_TOKEN", ""),
+			SeedPapersPath:  getEnv("SEED_PAPERS_PATH", ""),
 		},
 		Core: CoreConfig{
 			BaseURL: getEnv("CORE_BASE_URL", "http://127.0.0.1:8788"),

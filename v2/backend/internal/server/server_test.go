@@ -2,12 +2,11 @@
 //
 // 文件概述：server_test.go 用 httptest 验证各 /api 路由的契约：
 //   - GET /api/health 返回 200 且 data_dir 为绝对路径（M1 验收点）；
-//   - GET /api/topics 空库返回 []；
-//   - 主题写入后可列出；
+//   - GET /api/papers 空库返回 papers=[]；
 //   - GET /api/papers/:id 不存在返回 404；
 //   - PATCH /api/papers/:id/status 更新生效且校验非法值；
-//   - POST /api/sync 走 mock GitHub，同步结果正确；
-//   - POST /api/migrate-legacy 返回结构正确。
+//   - GET /api/sources 空库返回 []；
+//   - POST /api/sources/sync 全量同步空源管理器返回 results=[]。
 //
 // 测试用临时 SQLite 库（store.Open + Migrate），不依赖真实网络。
 package server
@@ -49,7 +48,7 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server) {
 			Provider: "deepseek", Model: "deepseek-chat",
 			APIBase: "http://x", APIKey: "k", Timeout: 10,
 		},
-		GitHub: config.GitHubConfig{DefaultRepo: "pwl/papers"},
+		PaperSource: config.PaperSourceConfig{},
 	}
 	s := New(cfg, db)
 	ts := httptest.NewServer(s.Handler())
@@ -125,34 +124,62 @@ func TestHealthReturnsAbsDataDir(t *testing.T) {
 	}
 }
 
-// TestListTopicsEmpty 验证空库返回 [] 而非 null（前端友好）。
-func TestListTopicsEmpty(t *testing.T) {
+// TestListPapersEmpty 验证空库返回 papers=[] 而非 null。
+func TestListPapersEmpty(t *testing.T) {
 	_, ts := newTestServer(t)
-	code, body := doGet(t, ts, "/api/topics")
+	code, body := doGet(t, ts, "/api/papers")
 	if code != 200 {
 		t.Fatalf("状态码: %d, body: %s", code, body)
 	}
-	if string(body) != "[]" {
-		t.Errorf("空库 topics 应返回 []，实际: %s", body)
+	var resp listPapersResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("解析失败: %v, body: %s", err, body)
+	}
+	if resp.Papers == nil {
+		t.Errorf("空库 papers 应为 [] 而非 null")
+	}
+	if resp.Total != 0 {
+		t.Errorf("空库 total 应为 0，实际 %d", resp.Total)
 	}
 }
 
-// TestCreateTopicAndList 验证写入主题后可列出。
-func TestCreateTopicAndList(t *testing.T) {
+// TestListPapersWithFilter 验证写入论文后可按 source 过滤列出。
+func TestListPapersWithFilter(t *testing.T) {
 	s, ts := newTestServer(t)
-	if err := s.repo.UpsertTopic(paper.Topic{ID: "ds", Name: "distributed_systems"}); err != nil {
+	// 用 UpsertPaperMeta 写两篇不同 source 的论文
+	if err := s.repo.UpsertPaperMeta(paper.PaperMeta{
+		Title: "Paper A", ArxivID: "0001.00001", Source: "arxiv",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	code, body := doGet(t, ts, "/api/topics")
+	if err := s.repo.UpsertPaperMeta(paper.PaperMeta{
+		Title: "Paper B", DOI: "10.1/b", Source: "openalex",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 全量
+	code, body := doGet(t, ts, "/api/papers")
 	if code != 200 {
-		t.Fatalf("状态码: %d", code)
+		t.Fatalf("全量状态码: %d, body: %s", code, body)
 	}
-	var topics []paper.Topic
-	if err := json.Unmarshal(body, &topics); err != nil {
-		t.Fatalf("解析失败: %v, body: %s", err, body)
+	var resp listPapersResponse
+	json.Unmarshal(body, &resp)
+	if resp.Total != 2 {
+		t.Errorf("全量 total: got %d want 2", resp.Total)
 	}
-	if len(topics) != 1 || topics[0].ID != "ds" {
-		t.Errorf("topics: %+v", topics)
+
+	// 按 source 过滤
+	code, body = doGet(t, ts, "/api/papers?source=arxiv")
+	if code != 200 {
+		t.Fatalf("过滤状态码: %d", code)
+	}
+	json.Unmarshal(body, &resp)
+	if resp.Total != 1 {
+		t.Errorf("arxiv 过滤 total: got %d want 1", resp.Total)
+	}
+	if len(resp.Papers) != 1 || resp.Papers[0].Title != "Paper A" {
+		t.Errorf("arxiv 过滤结果: %+v", resp.Papers)
 	}
 }
 
@@ -162,6 +189,30 @@ func TestGetPaperNotFound(t *testing.T) {
 	code, _ := doGet(t, ts, "/api/papers/nope")
 	if code != 404 {
 		t.Errorf("不存在论文应 404，实际 %d", code)
+	}
+}
+
+// TestGetPaperDetail 验证论文详情含阅读统计。
+func TestGetPaperDetail(t *testing.T) {
+	s, ts := newTestServer(t)
+	if err := s.repo.UpsertPaperMeta(paper.PaperMeta{
+		Title: "Detail Paper", ArxivID: "0002.00001", Source: "arxiv",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	code, body := doGet(t, ts, "/api/papers/arxiv_0002.00001")
+	if code != 200 {
+		t.Fatalf("状态码: %d, body: %s", code, body)
+	}
+	var detail paper.PaperDetail
+	if err := json.Unmarshal(body, &detail); err != nil {
+		t.Fatalf("解析失败: %v, body: %s", err, body)
+	}
+	if detail.Title != "Detail Paper" {
+		t.Errorf("Title: got %q want Detail Paper", detail.Title)
+	}
+	if detail.ReadingStats.Count != 0 {
+		t.Errorf("空库阅读次数应为 0，实际 %d", detail.ReadingStats.Count)
 	}
 }
 
@@ -200,56 +251,105 @@ func TestUpdatePaperStatusRejectsInvalid(t *testing.T) {
 	}
 }
 
-// TestSyncEndpoint 验证同步端点走 mock GitHub 并返回正确结果。
-func TestSyncEndpoint(t *testing.T) {
+// TestReadingStartEnd 验证开始/结束阅读流程。
+func TestReadingStartEnd(t *testing.T) {
 	s, ts := newTestServer(t)
-	// 起 mock GitHub API
-	ghSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/repos/pwl/papers/contents":
-			w.Write([]byte(`[{"name":"distributed_systems","path":"distributed_systems","type":"dir"}]`))
-		case "/repos/pwl/papers/contents/distributed_systems":
-			w.Write([]byte(`[{"name":"mapreduce.pdf","path":"distributed_systems/mapreduce.pdf","type":"file","download_url":"http://raw/mr.pdf"}]`))
-		default:
-			w.WriteHeader(404)
-		}
-	}))
-	defer ghSrv.Close()
-	// 注入指向 mock 的 GitHub 客户端
-	s.setGitHubClient(paper.NewGitHubClientWithBaseURL("", ghSrv.URL))
-
-	// 触发同步（空 body 用默认仓库 pwl/papers）
-	code, body := doJSON(t, ts, http.MethodPost, "/api/sync", nil)
-	if code != 200 {
-		t.Fatalf("sync 状态码: %d, body: %s", code, body)
+	if err := s.repo.UpsertPaperMeta(paper.PaperMeta{
+		Title: "Reading Paper", ArxivID: "0003.00001", Source: "arxiv",
+	}); err != nil {
+		t.Fatal(err)
 	}
-	var resp syncResultResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
+
+	// 开始阅读
+	code, body := doJSON(t, ts, http.MethodPost, "/api/papers/arxiv_0003.00001/reading-start", nil)
+	if code != 200 {
+		t.Fatalf("reading-start 状态码: %d, body: %s", code, body)
+	}
+	var start struct{ HistoryID string `json:"history_id"` }
+	if err := json.Unmarshal(body, &start); err != nil {
 		t.Fatalf("解析失败: %v, body: %s", err, body)
 	}
-	if resp.TopicsAdded != 1 || resp.PapersAdded != 1 {
-		t.Errorf("sync 结果: topics=%d papers=%d", resp.TopicsAdded, resp.PapersAdded)
+	if start.HistoryID == "" {
+		t.Fatal("history_id 不应为空")
 	}
-	// 验证论文确实落库
-	n, _ := s.repo.CountPapers()
-	if n != 1 {
-		t.Errorf("同步后论文数应为 1，实际 %d", n)
+
+	// 验证状态已置为 reading
+	p, _ := s.repo.GetPaper("arxiv_0003.00001")
+	if p.ReadStatus != "reading" {
+		t.Errorf("read_status: got %q want reading", p.ReadStatus)
+	}
+
+	// 结束阅读
+	code, body = doJSON(t, ts, http.MethodPost, "/api/papers/arxiv_0003.00001/reading-end",
+		[]byte(`{"history_id":"`+start.HistoryID+`"}`))
+	if code != 200 {
+		t.Fatalf("reading-end 状态码: %d, body: %s", code, body)
+	}
+
+	// 验证阅读统计已更新
+	detail, _ := s.repo.GetPaperWithHistory("arxiv_0003.00001")
+	if detail.ReadingStats.Count != 1 {
+		t.Errorf("阅读次数: got %d want 1", detail.ReadingStats.Count)
+	}
+	if detail.LastReadAt == "" {
+		t.Errorf("last_read_at 不应为空")
 	}
 }
 
-// TestMigrateLegacyEndpoint 验证迁移端点返回结构正确（无旧库时 found=0, results=[]）。
-func TestMigrateLegacyEndpoint(t *testing.T) {
+// TestListSourcesEmpty 验证空库返回 []。
+func TestListSourcesEmpty(t *testing.T) {
 	_, ts := newTestServer(t)
-	code, body := doJSON(t, ts, http.MethodPost, "/api/migrate-legacy", nil)
+	code, body := doGet(t, ts, "/api/sources")
 	if code != 200 {
-		t.Fatalf("migrate 状态码: %d, body: %s", code, body)
+		t.Fatalf("状态码: %d, body: %s", code, body)
 	}
-	var resp migrateLegacyResponse
+	if string(body) != "[]" {
+		t.Errorf("空库 sources 应返回 []，实际: %s", body)
+	}
+}
+
+// TestSyncSourcesAll 验证全量同步返回 results 数组。
+func TestSyncSourcesAll(t *testing.T) {
+	s, ts := newTestServer(t)
+	// 替换为空源管理器，SyncAll 返回空数组
+	s.setSourceManager(paper.NewSourceManager(s.repo))
+
+	code, body := doJSON(t, ts, http.MethodPost, "/api/sources/sync", nil)
+	if code != 200 {
+		t.Fatalf("状态码: %d, body: %s", code, body)
+	}
+	var resp struct {
+		Results []paper.SyncResult `json:"results"`
+	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("解析失败: %v, body: %s", err, body)
 	}
 	if resp.Results == nil {
-		t.Error("results 不应为 nil（应为空数组）")
+		t.Error("results 不应为 nil")
+	}
+}
+
+// TestRelatedPapers 验证相关论文按 sub_domain 返回。
+func TestRelatedPapers(t *testing.T) {
+	s, ts := newTestServer(t)
+	// 写两篇同 sub_domain 的论文 + 一篇不同 sub_domain
+	_ = s.repo.UpsertPaperMeta(paper.PaperMeta{Title: "A", ArxivID: "0004.00001", Source: "arxiv"})
+	// 设置 sub_domain
+	_, _ = s.db.Exec(`UPDATE papers SET sub_domain='llm' WHERE id='arxiv_0004.00001'`)
+	_ = s.repo.UpsertPaperMeta(paper.PaperMeta{Title: "B", ArxivID: "0004.00002", Source: "arxiv"})
+	_, _ = s.db.Exec(`UPDATE papers SET sub_domain='llm' WHERE id='arxiv_0004.00002'`)
+	_ = s.repo.UpsertPaperMeta(paper.PaperMeta{Title: "C", ArxivID: "0004.00003", Source: "arxiv"})
+	_, _ = s.db.Exec(`UPDATE papers SET sub_domain='ml' WHERE id='arxiv_0004.00003'`)
+
+	code, body := doGet(t, ts, "/api/papers/arxiv_0004.00001/related")
+	if code != 200 {
+		t.Fatalf("状态码: %d, body: %s", code, body)
+	}
+	var papers []paper.Paper
+	if err := json.Unmarshal(body, &papers); err != nil {
+		t.Fatalf("解析失败: %v, body: %s", err, body)
+	}
+	if len(papers) != 1 || papers[0].Title != "B" {
+		t.Errorf("相关论文应为 1 篇 (B)，实际: %+v", papers)
 	}
 }

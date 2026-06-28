@@ -72,7 +72,7 @@ func newTestServerWithMockLLM(t *testing.T, llmResponses []string) (*Server, *ht
 			Provider: "deepseek", Model: "deepseek-chat",
 			APIBase: mock.URL(), APIKey: "k", Timeout: 10,
 		},
-		GitHub: config.GitHubConfig{DefaultRepo: "pwl/papers"},
+		PaperSource: config.PaperSourceConfig{},
 	}
 	s := New(cfg, db)
 	ts := httptest.NewServer(s.Handler())

@@ -1,15 +1,14 @@
-// 设置页：健康检查 + 技能管理 + 旧库迁移。
+// 设置页：健康检查 + 技能管理。
 //
 // 痛点②验收可视点：health.data_dir 显示绝对路径，启动自检一目了然。
 // 痛点③修复：技能 CRUD 走结构化 JSON，错误信息走 toast。
 import { useEffect, useState } from 'react'
-import { Activity, Database, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { Activity, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import {
   ApiCallError,
   deleteSkill,
   getHealth,
   listSkills,
-  migrateLegacy,
   upsertSkill,
   type HealthInfo,
   type Skill,
@@ -24,7 +23,6 @@ export default function SettingsPage() {
   const [healthError, setHealthError] = useState<string | null>(null)
   const [skills, setSkills] = useState<Skill[]>([])
   const [skillsLoading, setSkillsLoading] = useState(true)
-  const [migrating, setMigrating] = useState(false)
 
   const loadHealth = async () => {
     setHealthLoading(true)
@@ -56,22 +54,6 @@ export default function SettingsPage() {
     void loadSkills()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const handleMigrate = async () => {
-    setMigrating(true)
-    try {
-      const resp = await migrateLegacy()
-      pushToast(
-        'success',
-        `扫描 ${resp.found} 个旧库，迁移 ${resp.results.length} 项`,
-      )
-      await loadHealth()
-    } catch (err) {
-      pushToast('error', `迁移失败：${err instanceof ApiCallError ? err.message : String(err)}`)
-    } finally {
-      setMigrating(false)
-    }
-  }
 
   const handleDeleteSkill = async (slug: string) => {
     if (!confirm(`确认删除技能「${slug}」？`)) return
@@ -129,14 +111,6 @@ export default function SettingsPage() {
               className="rounded bg-brand-100 px-3 py-1 text-xs text-brand-700 hover:bg-brand-200"
             >
               重新检查
-            </button>
-            <button
-              type="button"
-              onClick={handleMigrate}
-              disabled={migrating}
-              className="flex items-center gap-1 rounded bg-brand-100 px-3 py-1 text-xs text-brand-700 hover:bg-brand-200 disabled:opacity-50"
-            >
-              <Database size={12} /> {migrating ? '迁移中…' : '迁移旧库'}
             </button>
           </div>
         </section>

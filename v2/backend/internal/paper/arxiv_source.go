@@ -54,6 +54,16 @@ func NewArxivSourceWithBaseURL(baseURL string) *ArxivSource {
 	return s
 }
 
+// NewArxivSourceWithMax 构造指定每分类拉取数量的 arXiv 数据源。
+// maxResults <= 0 时使用默认值 50。
+func NewArxivSourceWithMax(maxResults int) *ArxivSource {
+	s := NewArxivSource()
+	if maxResults > 0 {
+		s.maxResults = maxResults
+	}
+	return s
+}
+
 // ID 返回源标识 "arxiv"。
 func (a *ArxivSource) ID() string { return "arxiv" }
 

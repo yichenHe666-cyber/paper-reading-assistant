@@ -7,26 +7,27 @@
 //   - ErrorBoundary 包裹路由区，子组件渲染异常不致整应用白屏。
 import { useEffect } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
-import { BookOpen, MessageSquare, Settings, Library } from 'lucide-react'
+import { MessageSquare, Settings, Library } from 'lucide-react'
 import { useChatStore } from '@/stores/chat'
 import { useLibraryStore } from '@/stores/library'
 import { ToastViewport } from '@/components/Toast'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import ChatPage from '@/pages/ChatPage'
 import LibraryPage from '@/pages/LibraryPage'
+import PaperReader from '@/pages/PaperReader'
 import SettingsPage from '@/pages/SettingsPage'
 
 export default function App() {
   const loadSessions = useChatStore((s) => s.loadSessions)
-  const loadTopics = useLibraryStore((s) => s.loadTopics)
+  const loadSources = useLibraryStore((s) => s.loadSources)
 
-  // 首次挂载预加载会话与主题列表
+  // 首次挂载预加载会话与数据源列表
   useEffect(() => {
     void loadSessions().catch(() => {
       /* 后端未起时静默，UI 显示空状态 */
     })
-    void loadTopics().catch(() => {})
-  }, [loadSessions, loadTopics])
+    void loadSources().catch(() => {})
+  }, [loadSessions, loadSources])
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
@@ -41,14 +42,7 @@ export default function App() {
           <NavItem to="/settings" icon={<Settings size={16} />} label="设置" />
         </nav>
         <div className="border-t border-brand-100 p-2 text-xs text-brand-700">
-          <a
-            href="https://github.com/pwl/papers"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="flex items-center gap-1 hover:text-brand-500"
-          >
-            <BookOpen size={12} /> Papers We Love
-          </a>
+          AI 论文聚合 · arXiv / OpenAlex / ACL
         </div>
       </aside>
 
@@ -60,6 +54,7 @@ export default function App() {
             <Route path="/chat/:sessionId" element={<ChatPage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/:topicId" element={<LibraryPage />} />
+            <Route path="/papers/:id/read" element={<PaperReader />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

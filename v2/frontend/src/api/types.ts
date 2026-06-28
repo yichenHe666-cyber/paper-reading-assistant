@@ -5,7 +5,8 @@
 //
 // 后端来源：
 //   - store.Session / store.Message / store.Skill
-//   - paper.Topic / paper.Paper
+//   - paper.Paper / paper.Source / paper.PaperDetail / paper.ReadingStats
+//   - paper.PaperFilter / paper.SyncResult
 //   - agent.StreamEvent / agent.Usage
 //   - server handlers 的响应 gin.H
 
@@ -21,6 +22,8 @@ export interface Topic {
 
 export type ReadStatus = 'unread' | 'reading' | 'done' | 'reread'
 
+// Paper 表示一篇论文的元数据。
+// 字段名按后端 json tag（snake_case）镜像，与 paper.Paper struct 一一对应。
 export interface Paper {
   id: string
   title: string
@@ -33,6 +36,78 @@ export interface Paper {
   read_status: ReadStatus
   obsidian_path: string
   created_at: string
+  // --- 多数据源扩展字段（arXiv/OpenAlex/ACL/Company） ---
+  source: string // 数据源：arxiv/openalex/acl/company
+  venue: string // 发表会议/期刊
+  level: string // AI 分类难度：beginner/intermediate/advanced
+  paper_type: string // 论文类型：survey/tutorial/classic/original/research/...
+  sub_domain: string // 子领域：ml/dl/llm/safety/rl/reasoning/infra/dist_sys/...
+  difficulty_score: number // 难度评分 1-10
+  tags: string // 标签 JSON 数组字符串，如 '["transformer","attention"]'
+  ai_classified: number // 是否已 AI 分类：0=人工预设/未分类，1=已分类
+  company: string // 公司名（company 源用）
+  github_repo: string // GitHub 仓库全名（company 源用）
+  arxiv_id: string // arXiv ID
+  last_read_at: string // 上次阅读时间
+  total_read_seconds: number // 累计阅读时长（秒）
+}
+
+// Source 表示一个论文数据源（arxiv/openalex/acl/company 等）。
+export interface Source {
+  id: string
+  name: string
+  source_type: string
+  enabled: number // 0/1（SQLite 整数布尔）
+  last_synced_at: string
+  sync_count: number
+  config: string
+}
+
+// ReadingStats 是论文阅读历史统计。
+export interface ReadingStats {
+  count: number // 阅读次数（reading_history 记录数）
+  total_seconds: number // 累计阅读时长（秒）
+  last_read_at: string // 上次阅读时间
+}
+
+// PaperDetail 是论文详情（论文元数据 + 阅读统计）。
+// 对应后端 paper.PaperDetail（内嵌 Paper + ReadingStats）。
+export interface PaperDetail extends Paper {
+  reading_stats: ReadingStats
+}
+
+// ListPapersResponse 是 GET /api/papers 的响应体。
+export interface ListPapersResponse {
+  papers: Paper[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// PaperFilter 是 listPapers 的过滤条件，字段对应后端 query string 参数。
+// 空值不传递，由 client.listPapers 负责剔除。
+export interface PaperFilter {
+  source?: string // 数据源：arxiv/openalex/acl/company
+  level?: string // 难度：beginner/intermediate/advanced
+  sub_domain?: string // 子领域：ml/dl/llm/...
+  paper_type?: string // 论文类型：survey/tutorial/...
+  q?: string // 关键词（标题/作者/摘要模糊匹配）
+  page?: number // 页码，从 1 开始
+  page_size?: number // 每页条数
+}
+
+// SyncResult 记录单个数据源的同步结果。
+export interface SyncResult {
+  source_id: string
+  success: boolean
+  count: number
+  error: string
+  duration: number // 同步耗时（纳秒，time.Duration 序列化值）
+}
+
+// ClassifyResponse 是 POST /api/papers/classify 的响应体。
+export interface ClassifyResponse {
+  classified: number
 }
 
 // --- 会话与消息 ---
@@ -92,27 +167,6 @@ export interface HealthInfo {
   topic_count: number
   llm_provider: string
   llm_model: string
-}
-
-// --- 同步与迁移 ---
-
-export interface SyncResult {
-  owner: string
-  repo: string
-  topics_added: number
-  papers_added: number
-}
-
-export interface MigrateResult {
-  source_db: string
-  topics_added?: number
-  papers_added?: number
-  error?: string
-}
-
-export interface MigrateLegacyResponse {
-  found: number
-  results: MigrateResult[]
 }
 
 // --- 发消息响应（非流式） ---

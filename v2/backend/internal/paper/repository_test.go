@@ -94,12 +94,12 @@ func TestUpsertPaperAndList(t *testing.T) {
 	_ = repo.UpdatePaperCount("distributed_systems")
 
 	// 列出验证
-	papers, err := repo.ListPapers("distributed_systems")
+	papers, err := repo.ListPapersByTopic("distributed_systems")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(papers) != 1 || papers[0].Title != "MapReduce" {
-		t.Fatalf("ListPapers 错误: %+v", papers)
+		t.Fatalf("ListPapersByTopic 错误: %+v", papers)
 	}
 
 	// 关闭后重开同一文件，验证数据持久（模拟重启）
@@ -121,12 +121,12 @@ func TestUpsertPaperAndList(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("重开后论文数应为 1，实际 %d（数据未持久？）", n)
 	}
-	papers2, err := repo2.ListPapers("distributed_systems")
+	papers2, err := repo2.ListPapersByTopic("distributed_systems")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(papers2) != 1 || papers2[0].Title != "MapReduce" {
-		t.Fatalf("重开后 ListPapers 错误: %+v", papers2)
+		t.Fatalf("重开后 ListPapersByTopic 错误: %+v", papers2)
 	}
 }
 

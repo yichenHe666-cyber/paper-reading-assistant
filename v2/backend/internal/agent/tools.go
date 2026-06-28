@@ -160,7 +160,7 @@ func (t *searchPapersTool) Execute(ctx context.Context, argsJSON string) (string
 	var err error
 	if args.TopicID != "" {
 		// 按主题取，再内存过滤关键词
-		papers, err = t.repo.ListPapers(args.TopicID)
+		papers, err = t.repo.ListPapersByTopic(args.TopicID)
 		if err != nil {
 			return "", fmt.Errorf("查询主题论文失败: %w", err)
 		}

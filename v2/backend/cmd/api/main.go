@@ -3,8 +3,7 @@
 // 文件概述：main.go 是后端二进制的启动点，串联各层：
 //   1. config.Load：加载配置并绝对化数据路径（痛点②修复核心）；
 //   2. store.Open + Migrate：打开 SQLite（绝对路径）并建表；
-//   3. paper.FindLegacyDBs + MigrateLegacyDB：尽力迁移旧版相对路径遗留库（找回历史数据）；
-//   4. server.New + Run：装配 gin 路由并启动 HTTP 服务（带优雅关闭）。
+//   3. server.New + Run：装配 gin 路由并启动 HTTP 服务（带优雅关闭）。
 //
 // 启动后访问 GET /api/health 应返回 data_dir 绝对路径——这是 M1 验收点。
 // 退出路径：Run 收到 SIGINT/SIGTERM 返回 nil 后，defer db.Close() 执行 WAL checkpoint，
@@ -15,7 +14,6 @@ import (
 	"log"
 
 	"nuclear-ox-v2/backend/internal/config"
-	"nuclear-ox-v2/backend/internal/paper"
 	"nuclear-ox-v2/backend/internal/server"
 	"nuclear-ox-v2/backend/internal/store"
 )
@@ -37,18 +35,7 @@ func main() {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
 
-	// 3. 启动时尽力迁移旧库：找回散落在历史 cwd 的论文数据（痛点②业务层）
-	repo := paper.NewRepository(db)
-	for _, legacy := range paper.FindLegacyDBs(cfg.DBPath) {
-		r, err := paper.MigrateLegacyDB(repo, legacy)
-		if err != nil {
-			log.Printf("[迁移] 旧库 %s 失败: %v", legacy, err)
-			continue
-		}
-		log.Printf("[迁移] 已从旧库 %s 导入: 主题 %d, 论文 %d", legacy, r.TopicsMoved, r.PapersMoved)
-	}
-
-	// 4. 装配并启动 HTTP 服务
+	// 3. 装配并启动 HTTP 服务
 	srv := server.New(cfg, db)
 	log.Printf("=== 核动力科研牛马 v2 启动 ===")
 	log.Printf("监听: http://%s:%d", cfg.Server.Host, cfg.Server.Port)

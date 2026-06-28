@@ -30,7 +30,7 @@ interface ChatState {
   createNewSession: (title?: string) => Promise<string>
   appendMessage: (m: Message) => void
   appendAssistantChunk: (sessionId: string, chunk: string) => void
-  finalizeStreamingMessage: (sessionId: string, fullContent: string, tokenCount: number) => void
+  finalizeStreamingMessage: (sessionId: string, fullContent: string, tokenCount: number) => Promise<void>
   setStreamStatus: (s: StreamStatus, errMsg?: string) => void
   reset: () => void
 }
