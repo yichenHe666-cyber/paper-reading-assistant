@@ -14,8 +14,11 @@ package paper
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // Topic 表示一个论文主题分类（对应 Papers We Love 仓库顶层目录）。
@@ -216,4 +219,121 @@ func Slugify(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// Source 表示一个论文数据源（arxiv/openalex/acl/company 等）。
+type Source struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	SourceType   string `json:"source_type"`
+	Enabled      int    `json:"enabled"`
+	LastSyncedAt string `json:"last_synced_at"`
+	SyncCount    int    `json:"sync_count"`
+	Config       string `json:"config"`
+}
+
+// paperMetaID 按 arxiv_id > doi > uuid 的优先级生成稳定 id。
+func paperMetaID(meta PaperMeta) string {
+	if meta.ArxivID != "" {
+		return "arxiv_" + meta.ArxivID
+	}
+	if meta.DOI != "" {
+		return "doi_" + meta.DOI
+	}
+	return "uuid_" + uuid.New().String()
+}
+
+// tagsToJSON 将标签切片序列化为 JSON 字符串；空切片返回空串。
+func tagsToJSON(tags []string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(tags)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// UpsertPaperMeta 将数据源返回的 PaperMeta 幂等写入 papers 表。
+// id 生成规则：有 arxiv_id 用 arxiv_{arxiv_id}，有 doi 用 doi_{doi}，否则 uuid_{uuid}。
+// 不覆盖 read_status/obsidian_path/last_read_at/total_read_seconds（用户阅读状态与笔记）。
+// 若论文已存在且 ai_classified=0（人工预设），不覆盖 tags；level/paper_type/sub_domain/difficulty_score
+// 由 AI 分类流程维护，本方法（数据源同步）不触碰它们。
+func (r *Repository) UpsertPaperMeta(meta PaperMeta) error {
+	id := paperMetaID(meta)
+	tagsJSON := tagsToJSON(meta.Tags)
+	_, err := r.db.Exec(
+		`INSERT INTO papers(id, title, authors, year, abstract, pdf_url, doi, arxiv_id,
+			source, venue, company, github_repo, tags, ai_classified)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		 ON CONFLICT(id) DO UPDATE SET
+			title=excluded.title, authors=excluded.authors, year=excluded.year,
+			abstract=excluded.abstract, pdf_url=excluded.pdf_url, doi=excluded.doi,
+			arxiv_id=excluded.arxiv_id, source=excluded.source, venue=excluded.venue,
+			company=excluded.company, github_repo=excluded.github_repo,
+			tags=CASE WHEN papers.ai_classified=0 THEN papers.tags ELSE excluded.tags END`,
+		id, meta.Title, meta.Authors, meta.Year, meta.Abstract, meta.PDFURL, meta.DOI,
+		meta.ArxivID, meta.Source, meta.Venue, meta.Company, meta.GitHubRepo, tagsJSON,
+	)
+	if err != nil {
+		return fmt.Errorf("UpsertPaperMeta(%s) 失败: %w", id, err)
+	}
+	return nil
+}
+
+// UpdateSourceSync UPSERT 到 sources 表，刷新 last_synced_at 与 sync_count。
+// name/source_type 为 NOT NULL 列，首次插入以空串占位（由源注册流程另行维护），
+// 冲突时仅更新 last_synced_at 与 sync_count，不覆盖已有的 name/source_type。
+func (r *Repository) UpdateSourceSync(sourceID string, count int) error {
+	_, err := r.db.Exec(
+		`INSERT INTO sources(id, name, source_type, last_synced_at, sync_count)
+		 VALUES(?, '', '', datetime('now'), ?)
+		 ON CONFLICT(id) DO UPDATE SET last_synced_at=datetime('now'), sync_count=excluded.sync_count`,
+		sourceID, count,
+	)
+	if err != nil {
+		return fmt.Errorf("UpdateSourceSync(%s) 失败: %w", sourceID, err)
+	}
+	return nil
+}
+
+// ListSources 查询全部数据源，按 id 排序。
+func (r *Repository) ListSources() ([]Source, error) {
+	rows, err := r.db.Query(
+		`SELECT id, COALESCE(name,''), COALESCE(source_type,''), COALESCE(enabled,1),
+		        COALESCE(last_synced_at,''), COALESCE(sync_count,0), COALESCE(config,'')
+		 FROM sources ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("ListSources 查询失败: %w", err)
+	}
+	defer rows.Close()
+
+	var sources []Source
+	for rows.Next() {
+		var s Source
+		if err := rows.Scan(&s.ID, &s.Name, &s.SourceType, &s.Enabled,
+			&s.LastSyncedAt, &s.SyncCount, &s.Config); err != nil {
+			return nil, fmt.Errorf("ListSources 扫描失败: %w", err)
+		}
+		sources = append(sources, s)
+	}
+	return sources, rows.Err()
+}
+
+// GetSource 按 id 查询单个数据源。
+func (r *Repository) GetSource(id string) (*Source, error) {
+	var s Source
+	err := r.db.QueryRow(
+		`SELECT id, COALESCE(name,''), COALESCE(source_type,''), COALESCE(enabled,1),
+		        COALESCE(last_synced_at,''), COALESCE(sync_count,0), COALESCE(config,'')
+		 FROM sources WHERE id=?`, id,
+	).Scan(&s.ID, &s.Name, &s.SourceType, &s.Enabled, &s.LastSyncedAt, &s.SyncCount, &s.Config)
+	if err == sql.ErrNoRows {
+		return nil, nil // 未找到返回 nil（非错误），便于上层区分
+	}
+	if err != nil {
+		return nil, fmt.Errorf("GetSource(%s) 失败: %w", id, err)
+	}
+	return &s, nil
 }

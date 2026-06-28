@@ -58,8 +58,8 @@ type ghContent struct {
 	DownloadURL string `json:"download_url"`  // 文件下载地址（目录为空）
 }
 
-// SyncResult 描述一次同步的统计。
-type SyncResult struct {
+// GitHubSyncResult 描述一次 GitHub 同步的统计。
+type GitHubSyncResult struct {
 	TopicsAdded int // 处理的主题数（含已存在的，因 Upsert 幂等）
 	PapersAdded int // 处理的论文数
 }
@@ -68,8 +68,8 @@ type SyncResult struct {
 // owner/repoName 如 "papers-we-love/papers-we-love"。
 //
 // 流程幂等：可安全重复调用。失败时返回已处理部分与错误。
-func (g *GitHubClient) Sync(ctx context.Context, repo *Repository, owner, repoName string) (SyncResult, error) {
-	var result SyncResult
+func (g *GitHubClient) Sync(ctx context.Context, repo *Repository, owner, repoName string) (GitHubSyncResult, error) {
+	var result GitHubSyncResult
 
 	// 1. 列根目录 → 主题目录
 	rootEntries, err := g.listContents(ctx, owner, repoName, "")

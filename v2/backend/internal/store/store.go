@@ -13,6 +13,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	// 注册纯 Go 的 SQLite 驱动，import 别名供 database/sql 使用。
 	// 注意：modernc.org/sqlite v1.x 注册的驱动名为 "sqlite"（非 "sqlite3"），
@@ -42,6 +43,53 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("启用外键约束失败: %w", err)
 	}
 	return db, nil
+}
+
+// columnExists 检查指定表是否已包含某列。
+// 用于 ALTER TABLE ADD COLUMN 的幂等检查（SQLite 的 ADD COLUMN 不支持 IF NOT EXISTS）。
+func columnExists(db *sql.DB, table, column string) (bool, error) {
+	// 注意：table 参数均为内部硬编码常量，不存在 SQL 注入风险；
+	// 且 PRAGMA 语句不支持参数绑定，故用 fmt.Sprintf 拼接。
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s);", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			ctype   string
+			notnull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
+// addColumnIfMissing 幂等地为表添加列：列已存在则跳过，否则执行 ALTER TABLE ADD COLUMN。
+// columnDef 形如 "TEXT DEFAULT ''" 或 "INTEGER DEFAULT 0"。
+func addColumnIfMissing(db *sql.DB, table, column, columnDef string) error {
+	exists, err := columnExists(db, table, column)
+	if err != nil {
+		return fmt.Errorf("检查列 %s.%s 失败: %w", table, column, err)
+	}
+	if exists {
+		return nil
+	}
+	log.Printf("迁移：为表 %s 新增列 %s %s", table, column, columnDef)
+	stmt := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", table, column, columnDef)
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("ALTER TABLE %s ADD COLUMN %s 失败: %w", table, column, err)
+	}
+	return nil
 }
 
 // Migrate 创建/升级表结构。全部使用 IF NOT EXISTS，幂等且不破坏已有数据。
@@ -75,6 +123,36 @@ CREATE TABLE IF NOT EXISTS papers (
 	FOREIGN KEY (topic_id) REFERENCES topics(id)
 );`); err != nil {
 		return fmt.Errorf("建表 papers 失败: %w", err)
+	}
+
+	// papers 表的增量字段：论文来源/分类/阅读统计等。
+	// SQLite 的 ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS，需先查 pragma table_info 判断列是否存在，
+	// 旧库已有数据时不会重置已有行——新增列自动取 DEFAULT 值。
+	// 注意：保留原有 topic_id 等字段不动，只做增量升级。
+	paperColumns := []struct {
+		name string
+		def  string
+	}{
+		{"source", "TEXT DEFAULT ''"},
+		{"venue", "TEXT DEFAULT ''"},
+		{"level", "TEXT DEFAULT ''"},
+		{"paper_type", "TEXT DEFAULT ''"},
+		{"sub_domain", "TEXT DEFAULT ''"},
+		{"difficulty_score", "INTEGER DEFAULT 5"},
+		{"tags", "TEXT DEFAULT '[]'"},
+		{"ai_classified", "INTEGER DEFAULT 0"},
+		{"company", "TEXT DEFAULT ''"},
+		{"github_repo", "TEXT DEFAULT ''"},
+		{"last_read_at", "TEXT DEFAULT ''"},
+		{"total_read_seconds", "INTEGER DEFAULT 0"},
+		// arxiv_id 不在任务明确列出的字段清单内，但 idx_papers_arxiv_id 索引依赖该列，
+		// 故一并补齐（若已存在则跳过），否则建索引会失败。
+		{"arxiv_id", "TEXT DEFAULT ''"},
+	}
+	for _, c := range paperColumns {
+		if err := addColumnIfMissing(db, "papers", c.name, c.def); err != nil {
+			return err
+		}
 	}
 
 	// chat_sessions：智能体对话会话
@@ -179,6 +257,59 @@ CREATE TABLE IF NOT EXISTS llm_cache (
 	created_at TEXT DEFAULT (datetime('now'))
 );`); err != nil {
 		return fmt.Errorf("建表 llm_cache 失败: %w", err)
+	}
+
+	// sources：论文数据源登记（arxiv/openalex/acl/company 等）
+	if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS sources (
+	id              TEXT PRIMARY KEY,
+	name            TEXT NOT NULL,
+	source_type     TEXT NOT NULL,
+	enabled         INTEGER DEFAULT 1,
+	last_synced_at  TEXT DEFAULT '',
+	sync_count      INTEGER DEFAULT 0,
+	config          TEXT DEFAULT '{}'
+);`); err != nil {
+		return fmt.Errorf("建表 sources 失败: %w", err)
+	}
+
+	// paper_tags：论文-标签多对多关联（与 papers.tags JSON 列互补，便于按标签检索）
+	if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS paper_tags (
+	paper_id        TEXT NOT NULL,
+	tag             TEXT NOT NULL,
+	PRIMARY KEY (paper_id, tag)
+);`); err != nil {
+		return fmt.Errorf("建表 paper_tags 失败: %w", err)
+	}
+
+	// reading_history：论文阅读会话记录（start/end/duration，支撑阅读时长统计）
+	if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS reading_history (
+	id               TEXT PRIMARY KEY,
+	paper_id         TEXT NOT NULL,
+	start_time       TEXT NOT NULL,
+	end_time         TEXT DEFAULT '',
+	duration_seconds INTEGER DEFAULT 0,
+	FOREIGN KEY (paper_id) REFERENCES papers(id)
+);`); err != nil {
+		return fmt.Errorf("建表 reading_history 失败: %w", err)
+	}
+
+	// 索引：加速按来源/级别/子领域/类型/arxiv_id 检索论文，以及按论文检索阅读历史。
+	// CREATE INDEX IF NOT EXISTS 自身幂等，无需额外检查。
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_papers_source ON papers(source);`,
+		`CREATE INDEX IF NOT EXISTS idx_papers_level ON papers(level);`,
+		`CREATE INDEX IF NOT EXISTS idx_papers_sub_domain ON papers(sub_domain);`,
+		`CREATE INDEX IF NOT EXISTS idx_papers_paper_type ON papers(paper_type);`,
+		`CREATE INDEX IF NOT EXISTS idx_papers_arxiv_id ON papers(arxiv_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_reading_history_paper ON reading_history(paper_id);`,
+	}
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx); err != nil {
+			return fmt.Errorf("创建索引失败 (%s): %w", idx, err)
+		}
 	}
 
 	return nil
