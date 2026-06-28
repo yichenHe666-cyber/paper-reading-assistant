@@ -1,0 +1,2953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>核动力科研牛马 v3 — UI Design Showcase</title>
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;500;600;700&family=Caveat:wght@400;500;600;700&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- 霞鹜文楷 — 手写华文楷体 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+<!-- KaTeX — LaTeX 公式渲染 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false},
+      {left: '\\\\(', right: '\\\\)', display: false},
+      {left: '\\\\[', right: '\\\\]', display: true}
+    ],
+    throwOnError: false,
+    ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+  });"></script>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  /* Core Palette — B站大会员专属弹幕色系 */
+  --neon-cyan: #4ecdc4;
+  --neon-magenta: #ff2d95;
+  --neon-yellow: #ffe033;
+  --neon-purple: #b44dff;
+  --neon-green: #39ff14;
+
+  /* B站大会员专属弹幕渐变色 */
+  --bili-liujin: linear-gradient(90deg, #ff9a56, #ffd96a, #ffb347, #ffcf7d, #f0a030);
+  --bili-pinkblue: linear-gradient(90deg, #ff6eb4, #6eb5ff, #ff85c0, #5eaeff, #ff6eb4);
+  --bili-xingqiong: linear-gradient(90deg, #1e3a6e, #4a8eff, #2860b8, #6eaaff, #1e3a6e);
+  --bili-huanzi: linear-gradient(90deg, #a855f7, #ec4899, #c084fc, #f472b6, #a855f7);
+  --bili-moyu: linear-gradient(90deg, #2d2d3f, #5c5c7a, #3d3d55, #6e6e8a, #2d2d3f);
+  --bili-rengong: linear-gradient(90deg, #ff6b6b, #ffa07a, #ff4500, #ff8c69, #ff6b6b);
+  --bili-bingjing: linear-gradient(90deg, #00d4ff, #7c3aed, #00bfff, #8b5cf6, #00d4ff);
+
+  /* B站弹幕色值 */
+  --bili-pink: #FB7299;
+  --bili-blue: #23ADE5;
+  --bili-green: #6dc781;
+
+  /* Base */
+  --bg-primary: #f8f9fc;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-elevated: rgba(255, 255, 255, 0.95);
+  --text-primary: #1a1a2e;
+  --text-secondary: #5a5a7a;
+  --text-muted: #9a9ab0;
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-accent: rgba(0, 240, 255, 0.25);
+
+  /* Glow Shadows */
+  --glow-cyan: 0 0 20px rgba(78, 205, 196, 0.3), 0 0 60px rgba(78, 205, 196, 0.08);
+  --glow-magenta: 0 0 20px rgba(255, 45, 149, 0.35), 0 0 60px rgba(255, 45, 149, 0.1);
+  --glow-yellow: 0 0 20px rgba(255, 224, 51, 0.35), 0 0 60px rgba(255, 224, 51, 0.1);
+  --glow-purple: 0 0 20px rgba(180, 77, 255, 0.35), 0 0 60px rgba(180, 77, 255, 0.1);
+
+  /* Typography — 手写体系：中文楷体 + 英文手写体 + 霓虹赛博 */
+  --font-body: 'LXGW WenKai', 'Kalam', 'PingFang SC', 'Noto Sans SC', system-ui, cursive;
+  --font-display: 'Ma Shan Zheng', 'Caveat', 'LXGW WenKai', system-ui, cursive;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  --font-rounded: 'Quicksand', 'Kalam', 'LXGW WenKai', system-ui, cursive;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --radius-bubble: 18px 18px 18px 4px;
+
+  /* Transitions */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 150ms var(--ease-smooth);
+  --transition-normal: 250ms var(--ease-smooth);
+  --transition-slow: 400ms var(--ease-smooth);
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  scroll-behavior: smooth;
+  /* 字体渲染清晰度优化 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-smooth: never;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.7;
+  overflow-x: hidden;
+  position: relative;
+  /* 极细描边增强手写体笔画清晰度 */
+  text-shadow: 0 0 0.5px rgba(0,0,0,0.15);
+}
+/* 五彩斑斓的黑：全局文字彩色渐变叠层 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 110, 180, 0.03) 0%,
+    rgba(168, 85, 247, 0.035) 15%,
+    rgba(78, 205, 196, 0.03) 30%,
+    rgba(236, 72, 153, 0.025) 45%,
+    rgba(110, 181, 255, 0.04) 60%,
+    rgba(192, 132, 252, 0.03) 75%,
+    rgba(255, 107, 107, 0.025) 90%,
+    rgba(255, 110, 180, 0.03) 100%
+  );
+  background-size: 400% 100%;
+  animation: rainbowBlackFlow 12s linear infinite;
+  mix-blend-mode: multiply;
+}
+@keyframes rainbowBlackFlow {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: -200% 50%; }
+}
+/* 修复叠层挡住交互 */
+body > * { position: relative; z-index: 1; }
+body > .particles-container { z-index: 0; }
+
+/* ============================================================
+   CUSTOM SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, rgba(78,205,196,0.04), rgba(180,77,255,0.03));
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--neon-cyan), var(--neon-purple));
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--bg-primary);
+}
+::-webkit-scrollbar-thumb:hover {
+  box-shadow: var(--glow-cyan);
+}
+
+/* ============================================================
+   SCANLINE OVERLAY
+   ============================================================ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 240, 255, 0.015) 2px,
+    rgba(0, 240, 255, 0.015) 4px
+  );
+  pointer-events: none;
+  z-index: 10000;
+}
+
+/* ============================================================
+   FLOATING PARTICLES (CSS-only)
+   ============================================================ */
+.particles-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+  animation: particleFloat linear infinite;
+}
+.particle:nth-child(1)  { width:4px;height:4px;background:var(--neon-cyan);left:10%;animation-duration:18s;animation-delay:0s; }
+.particle:nth-child(2)  { width:3px;height:3px;background:var(--neon-magenta);left:20%;animation-duration:22s;animation-delay:2s; }
+.particle:nth-child(3)  { width:5px;height:5px;background:var(--neon-yellow);left:30%;animation-duration:16s;animation-delay:4s; }
+.particle:nth-child(4)  { width:3px;height:3px;background:var(--neon-purple);left:40%;animation-duration:20s;animation-delay:1s; }
+.particle:nth-child(5)  { width:4px;height:4px;background:var(--neon-cyan);left:50%;animation-duration:24s;animation-delay:3s; }
+.particle:nth-child(6)  { width:3px;height:3px;background:var(--neon-magenta);left:60%;animation-duration:19s;animation-delay:5s; }
+.particle:nth-child(7)  { width:5px;height:5px;background:var(--neon-yellow);left:70%;animation-duration:21s;animation-delay:0s; }
+.particle:nth-child(8)  { width:4px;height:4px;background:var(--neon-purple);left:80%;animation-duration:17s;animation-delay:2s; }
+.particle:nth-child(9)  { width:3px;height:3px;background:var(--neon-cyan);left:90%;animation-duration:23s;animation-delay:4s; }
+.particle:nth-child(10) { width:5px;height:5px;background:var(--neon-magenta);left:5%;animation-duration:15s;animation-delay:1s; }
+.particle:nth-child(11) { width:3px;height:3px;background:var(--neon-yellow);left:15%;animation-duration:26s;animation-delay:6s; }
+.particle:nth-child(12) { width:4px;height:4px;background:var(--neon-purple);left:25%;animation-duration:18s;animation-delay:3s; }
+.particle:nth-child(13) { width:3px;height:3px;background:var(--neon-cyan);left:35%;animation-duration:22s;animation-delay:5s; }
+.particle:nth-child(14) { width:5px;height:5px;background:var(--neon-magenta);left:45%;animation-duration:20s;animation-delay:0s; }
+.particle:nth-child(15) { width:4px;height:4px;background:var(--neon-yellow);left:55%;animation-duration:16s;animation-delay:2s; }
+.particle:nth-child(16) { width:3px;height:3px;background:var(--neon-purple);left:65%;animation-duration:24s;animation-delay:4s; }
+.particle:nth-child(17) { width:5px;height:5px;background:var(--neon-cyan);left:75%;animation-duration:19s;animation-delay:1s; }
+.particle:nth-child(18) { width:3px;height:3px;background:var(--neon-magenta);left:85%;animation-duration:21s;animation-delay:3s; }
+.particle:nth-child(19) { width:4px;height:4px;background:var(--neon-yellow);left:95%;animation-duration:17s;animation-delay:5s; }
+.particle:nth-child(20) { width:3px;height:3px;background:var(--neon-purple);left:50%;animation-duration:23s;animation-delay:6s; }
+
+@keyframes particleFloat {
+  0%   { transform: translateY(110vh) translateX(0) scale(0); opacity: 0; }
+  10%  { opacity: 0.8; transform: translateY(90vh) translateX(20px) scale(1); }
+  50%  { opacity: 0.5; transform: translateY(50vh) translateX(-15px) scale(0.8); }
+  90%  { opacity: 0.3; transform: translateY(10vh) translateX(10px) scale(0.6); }
+  100% { transform: translateY(-10vh) translateX(-5px) scale(0); opacity: 0; }
+}
+
+/* ============================================================
+   SPARKLE / TWINKLE ANIMATION
+   ============================================================ */
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+@keyframes neonPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+@keyframes holoShimmer {
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -200% 50%; }
+}
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes floatUp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes streamingDots {
+  0%   { content: ''; opacity: 0.3; }
+  25%  { content: '.'; opacity: 0.6; }
+  50%  { content: '..'; opacity: 0.8; }
+  75%  { content: '...'; opacity: 1; }
+  100% { content: ''; opacity: 0.3; }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(0, 240, 255, 0.4); }
+  33% { border-color: rgba(180, 77, 255, 0.4); }
+  66% { border-color: rgba(255, 45, 149, 0.4); }
+}
+
+.sparkle-decor {
+  position: absolute;
+  width: 12px; height: 12px;
+  pointer-events: none;
+}
+.sparkle-decor::before, .sparkle-decor::after {
+  content: '';
+  position: absolute;
+  background: var(--neon-yellow);
+  border-radius: 2px;
+}
+.sparkle-decor::before {
+  width: 12px; height: 3px; top: 50%; left: 0;
+  transform: translateY(-50%);
+}
+.sparkle-decor::after {
+  width: 3px; height: 12px; left: 50%; top: 0;
+  transform: translateX(-50%);
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border-accent);
+  padding: 0 var(--space-2xl);
+  animation: borderGlow 4s ease infinite;
+}
+.nav-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-rounded);
+  font-weight: 800;
+  font-size: 18px;
+  /* 与 hero-title 一致：炫酷粉蓝 + 幻紫 */
+  background: linear-gradient(90deg, #ff6eb4, #ff85c0, #a855f7, #ec4899, #6eb5ff, #5eaeff, #c084fc, #f472b6, #ff6eb4);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: biliDanmakuFlow 12s linear infinite;
+  -webkit-text-stroke: 0.2px rgba(168, 85, 247, 0.06);
+  paint-order: stroke fill;
+}
+.nav-brand .brand-icon {
+  -webkit-text-fill-color: initial;
+}
+.nav-links {
+  display: flex;
+  gap: var(--space-xs);
+  list-style: none;
+}
+.nav-links a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 500;
+  transition: var(--transition-fast);
+  position: relative;
+}
+.nav-links a:hover {
+  color: var(--text-primary);
+  background: rgba(0, 240, 255, 0.08);
+}
+.nav-links a.active {
+  color: var(--neon-cyan);
+  background: rgba(78, 205, 196, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(78, 205, 196, 0.25);
+  animation: neonPulse 3s ease-in-out infinite;
+}
+.nav-links a .nav-icon { font-size: 16px; }
+
+/* ============================================================
+   BRAND ICON（🐂 核动力牛马 logo）
+   可复用组件，尺寸变体：brand-icon--sm / --md / --lg / --avatar
+   ============================================================ */
+.brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(78,205,196,0.1), rgba(180,77,255,0.15));
+  border: 2px solid rgba(168, 85, 247, 0.25);
+  position: relative;
+  flex-shrink: 0;
+  animation: neonPulse 3s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(168,85,247,0.15), 0 0 24px rgba(78,205,196,0.08);
+}
+.brand-icon::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #ff6eb4, #6eb5ff, #a855f7, #ff6eb4);
+  background-size: 300% 100%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 2px;
+  animation: biliDanmakuFlow 8s linear infinite;
+  z-index: -1;
+}
+.brand-icon--sm {
+  width: 32px; height: 32px;
+  font-size: 18px;
+  border-width: 1.5px;
+}
+.brand-icon--md {
+  width: 44px; height: 44px;
+  font-size: 24px;
+  border-width: 2px;
+}
+.brand-icon--lg {
+  width: 100px; height: 100px;
+  font-size: 50px;
+  border-width: 2.5px;
+  animation: neonPulse 3s ease-in-out infinite, floatUp 3s ease-in-out infinite;
+  box-shadow: 0 0 20px rgba(168,85,247,0.2), 0 0 40px rgba(78,205,196,0.1);
+}
+.brand-icon--avatar {
+  width: 36px; height: 36px;
+  font-size: 18px;
+  border-width: 2px;
+}
+.brand-icon--avatar-img {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(168, 85, 247, 0.25);
+  box-shadow: 0 0 8px rgba(168,85,247,0.15), 0 0 16px rgba(78,205,196,0.08);
+  animation: neonPulse 3s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   SECTION COMMON
+   ============================================================ */
+.page-section {
+  position: relative;
+  z-index: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-3xl) var(--space-2xl);
+  min-height: 100vh;
+}
+.page-section:not(:first-of-type) {
+  border-top: 1px solid var(--border-light);
+}
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--neon-purple);
+  background: rgba(180, 77, 255, 0.08);
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(180, 77, 255, 0.2);
+  margin-bottom: var(--space-md);
+}
+.section-title {
+  font-family: var(--font-rounded);
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: var(--space-sm);
+  line-height: 1.3;
+}
+.section-desc {
+  color: var(--text-secondary);
+  font-size: 16px;
+  max-width: 600px;
+  margin-bottom: var(--space-2xl);
+}
+
+/* ============================================================
+   HOLOGRAPHIC CARD BASE
+   ============================================================ */
+.holo-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-normal);
+  backdrop-filter: blur(10px);
+}
+.holo-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 240, 255, 0.06) 0%,
+    rgba(180, 77, 255, 0.04) 25%,
+    rgba(255, 45, 149, 0.06) 50%,
+    rgba(255, 224, 51, 0.04) 75%,
+    rgba(0, 240, 255, 0.06) 100%
+  );
+  background-size: 400% 400%;
+  animation: holoShimmer 8s ease infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.holo-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: var(--glow-cyan), 0 20px 40px rgba(0,0,0,0.06);
+}
+.holo-card > * { position: relative; z-index: 1; }
+
+/* ============================================================
+   NEON BADGE / TAG
+   ============================================================ */
+.neon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid;
+  white-space: nowrap;
+  animation: neonPulse 3s ease-in-out infinite;
+}
+.neon-badge.cyan {
+  color: var(--neon-cyan);
+  border-color: rgba(78,205,196,0.22);
+  background: rgba(78,205,196,0.07);
+}
+.neon-badge.magenta {
+  color: var(--neon-magenta);
+  border-color: rgba(255,45,149,0.3);
+  background: rgba(255,45,149,0.08);
+}
+.neon-badge.yellow {
+  color: #b8a200;
+  border-color: rgba(255,224,51,0.3);
+  background: rgba(255,224,51,0.1);
+}
+.neon-badge.purple {
+  color: var(--neon-purple);
+  border-color: rgba(180,77,255,0.3);
+  background: rgba(180,77,255,0.08);
+}
+.neon-badge.green {
+  color: #2dbe0e;
+  border-color: rgba(57,255,20,0.3);
+  background: rgba(57,255,20,0.08);
+}
+
+/* ============================================================
+   NEON BUTTON
+   ============================================================ */
+.neon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border: 2px solid var(--neon-cyan);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, rgba(78,205,196,0.08), rgba(180,77,255,0.05));
+  color: var(--neon-cyan);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  font-family: var(--font-rounded);
+  animation: neonPulse 3s ease-in-out infinite;
+}
+.neon-btn:hover {
+  background: linear-gradient(135deg, rgba(78,205,196,0.15), rgba(180,77,255,0.1));
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-2px);
+}
+.neon-btn.magenta {
+  border-color: var(--neon-magenta);
+  color: var(--neon-magenta);
+  background: linear-gradient(135deg, rgba(255,45,149,0.1), rgba(255,224,51,0.05));
+}
+.neon-btn.magenta:hover {
+  background: linear-gradient(135deg, rgba(255,45,149,0.2), rgba(255,224,51,0.1));
+  box-shadow: var(--glow-magenta);
+}
+.neon-btn .sparkle-icon {
+  position: relative;
+  display: inline-block;
+  width: 14px; height: 14px;
+}
+.neon-btn .sparkle-icon::before, .neon-btn .sparkle-icon::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+  border-radius: 1px;
+}
+.neon-btn .sparkle-icon::before {
+  width: 14px; height: 3px; top: 50%; left: 0;
+  transform: translateY(-50%) rotate(45deg);
+}
+.neon-btn .sparkle-icon::after {
+  width: 3px; height: 14px; left: 50%; top: 0;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+/* ============================================================
+   TERMINAL / CODE BLOCK
+   ============================================================ */
+.terminal-card {
+  background: #1a1a2e;
+  color: #e0e0f0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.terminal-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+}
+.terminal-dot.red { background: #ff5f57; }
+.terminal-dot.yellow { background: #febc2e; }
+.terminal-dot.green { background: #28c840; }
+.terminal-title {
+  margin-left: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+}
+.terminal-body {
+  padding: 16px 20px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.terminal-body .prompt { color: var(--neon-cyan); }
+.terminal-body .cmd { color: var(--neon-yellow); }
+.terminal-body .flag { color: var(--neon-magenta); }
+.terminal-body .string { color: var(--neon-green); }
+.terminal-body .comment { color: rgba(255,255,255,0.3); }
+.terminal-body .keyword { color: var(--neon-purple); }
+
+/* ============================================================
+   NEON INPUT
+   ============================================================ */
+.neon-input {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 12px 18px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  transition: var(--transition-normal);
+  outline: none;
+  width: 100%;
+}
+.neon-input:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.1), var(--glow-cyan);
+}
+.neon-input::placeholder { color: var(--text-muted); }
+
+/* ============================================================
+   TOGGLE SWITCH (neon-styled)
+   ============================================================ */
+.neon-toggle {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+  display: inline-block;
+}
+.neon-toggle input { display: none; }
+.neon-toggle .slider {
+  position: absolute;
+  inset: 0;
+  background: #dde0ea;
+  border-radius: var(--radius-pill);
+  transition: var(--transition-normal);
+}
+.neon-toggle .slider::before {
+  content: '';
+  position: absolute;
+  width: 20px; height: 20px;
+  left: 3px; top: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: var(--transition-normal);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+.neon-toggle input:checked + .slider {
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+.neon-toggle input:checked + .slider::before {
+  transform: translateX(22px);
+}
+
+/* ============================================================
+   PAGE 1: HERO / LANDING
+   ============================================================ */
+.hero {
+  text-align: center;
+  padding-top: var(--space-3xl);
+  padding-bottom: var(--space-3xl);
+  position: relative;
+}
+.hero-bg-gradient {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 600px;
+  background: radial-gradient(ellipse at center,
+    rgba(78,205,196,0.1) 0%,
+    rgba(180,77,255,0.08) 30%,
+    rgba(255,45,149,0.04) 60%,
+    transparent 80%
+  );
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: -1;
+}
+.hero-mascot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, rgba(78,205,196,0.12), rgba(180,77,255,0.15));
+  border: 2px solid rgba(78,205,196,0.22);
+  border-radius: var(--radius-xl);
+  font-size: 50px;
+  margin-bottom: var(--space-lg);
+  position: relative;
+  animation: floatUp 3s ease-in-out infinite;
+  box-shadow: var(--glow-cyan);
+}
+.hero-mascot .sparkle-decor {
+  top: -8px; right: -8px;
+  animation: twinkle 2s ease-in-out infinite;
+}
+.hero-title {
+  font-family: var(--font-rounded);
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 1.2;
+  margin-bottom: var(--space-md);
+  /* B站大会员弹幕：炫酷粉蓝 + 幻紫（无金黄色） */
+  background: linear-gradient(
+    90deg,
+    #ff6eb4 0%,
+    #ff85c0 15%,
+    #a855f7 30%,
+    #ec4899 42%,
+    #6eb5ff 55%,
+    #5eaeff 65%,
+    #c084fc 78%,
+    #f472b6 88%,
+    #ff6eb4 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: biliDanmakuFlow 8s linear infinite;
+  /* 用 paint-order + text-stroke 增强清晰度，避免 drop-shadow 模糊 */
+  -webkit-text-stroke: 0.3px rgba(168, 85, 247, 0.08);
+  paint-order: stroke fill;
+  position: relative;
+}
+@keyframes biliDanmakuFlow {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
+.hero-version {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  /* B站大会员弹幕：幻紫渐变 */
+  background: linear-gradient(90deg, #a855f7, #ec4899, #c084fc, #f472b6, #a855f7);
+  background-size: 300% 100%;
+  padding: 3px 14px;
+  border-radius: var(--radius-pill);
+  margin-left: 8px;
+  vertical-align: middle;
+  -webkit-text-fill-color: initial;
+  position: relative;
+  top: -4px;
+  animation: biliDanmakuFlow 8s linear infinite;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.35), 0 0 24px rgba(236, 72, 153, 0.15);
+}
+.hero-tagline {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2xl);
+  font-weight: 400;
+}
+.hero-tagline strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Architecture cards */
+.arch-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 900px;
+  margin: 0 auto var(--space-2xl);
+}
+.arch-card {
+  padding: var(--space-lg);
+  text-align: center;
+}
+.arch-card .arch-icon {
+  font-size: 32px;
+  margin-bottom: var(--space-sm);
+  display: block;
+}
+.arch-card .arch-name {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.arch-card .arch-tech {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.arch-arrow {
+  font-size: 24px;
+  color: var(--neon-cyan);
+  animation: neonPulse 2s ease-in-out infinite;
+  font-family: var(--font-mono);
+  position: relative;
+}
+.arch-arrow::after {
+  content: 'DATA';
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: var(--neon-magenta);
+  letter-spacing: 1px;
+}
+
+/* Quick start cards */
+.quickstart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: var(--space-lg);
+  max-width: 900px;
+  margin: 0 auto;
+}
+.quickstart-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-md);
+}
+.quickstart-card .card-header .step-num {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--bg-primary);
+}
+.quickstart-card .card-header .step-num.cyan-bg { background: var(--neon-cyan); }
+.quickstart-card .card-header .step-num.magenta-bg { background: var(--neon-magenta); }
+.quickstart-card .card-header .step-num.purple-bg { background: var(--neon-purple); }
+.quickstart-card .card-header .card-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+.quickstart-card .terminal-card {
+  font-size: 12px;
+}
+.quickstart-card .terminal-body {
+  padding: 12px 16px;
+}
+
+/* ============================================================
+   PAGE 2: CHAT
+   ============================================================ */
+.chat-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: var(--space-lg);
+  min-height: 80vh;
+}
+
+/* Chat Sidebar */
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+.sidebar-header h3 {
+  font-family: var(--font-rounded);
+  font-size: 16px;
+  font-weight: 700;
+}
+.sidebar-header .new-chat-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--neon-cyan);
+  background: rgba(78,205,196,0.07);
+  color: var(--neon-cyan);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+.sidebar-header .new-chat-btn:hover {
+  background: rgba(78,205,196,0.15);
+  box-shadow: var(--glow-cyan);
+}
+.session-list { list-style: none; }
+.session-item {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+.session-item:hover {
+  background: rgba(78,205,196,0.05);
+  border-color: rgba(78,205,196,0.12);
+}
+.session-item.active {
+  background: linear-gradient(135deg, rgba(78,205,196,0.08), rgba(180,77,255,0.05));
+  border-color: rgba(78,205,196,0.25);
+  box-shadow: 0 0 16px rgba(78,205,196,0.12);
+}
+.session-item .session-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-item .session-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.session-item.active .session-title {
+  color: var(--neon-cyan);
+  font-weight: 600;
+}
+
+/* Chat Main */
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-light);
+  background: rgba(78,205,196,0.02);
+}
+.chat-header .chat-title {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: 15px;
+}
+.chat-header .chat-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.chat-header .status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--neon-green);
+  box-shadow: 0 0 8px rgba(57,255,20,0.5);
+  animation: neonPulse 2s ease infinite;
+}
+.streaming-indicator {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  margin-left: 6px;
+}
+.streaming-indicator span {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  animation: twinkle 1.4s ease infinite;
+}
+.streaming-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.streaming-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+.chat-messages {
+  flex: 1;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  overflow-y: auto;
+}
+
+/* Chat bubbles */
+.chat-msg {
+  display: flex;
+  gap: 12px;
+  max-width: 85%;
+  animation: fadeInUp 0.3s ease;
+}
+.chat-msg.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.chat-msg .msg-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.chat-msg.assistant .msg-avatar {
+  background: linear-gradient(135deg, rgba(78,205,196,0.15), rgba(180,77,255,0.2));
+  border: 2px solid rgba(78,205,196,0.22);
+}
+.chat-msg .msg-bubble {
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  line-height: 1.7;
+  font-size: 14px;
+}
+.chat-msg.user .msg-bubble {
+  background: linear-gradient(135deg, rgba(78,205,196,0.12), rgba(0,180,200,0.2));
+  border: 1px solid rgba(78,205,196,0.18);
+  border-radius: var(--radius-bubble);
+  border-top-right-radius: 4px;
+  color: var(--text-primary);
+}
+.chat-msg.assistant .msg-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  border-radius: var(--radius-lg);
+  border-top-left-radius: 4px;
+}
+.chat-msg.assistant .msg-bubble p { margin-bottom: 10px; }
+.chat-msg.assistant .msg-bubble p:last-child { margin-bottom: 0; }
+.chat-msg.assistant .msg-bubble code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: rgba(78,205,196,0.07);
+  color: var(--neon-cyan);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+/* Markdown 代码块 — 浅色背景匹配聊天框 */
+.chat-msg.assistant .msg-bubble pre {
+  background: var(--bg-card);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  margin: 12px 0;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(168,85,247,0.06), 0 2px 8px rgba(0,0,0,0.06);
+}
+.chat-msg.assistant .msg-bubble pre code {
+  display: block;
+  padding: 14px 18px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: transparent;
+  border-radius: 0;
+  tab-size: 2;
+}
+/* 代码块顶栏 */
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: rgba(168, 85, 247, 0.06);
+  border-bottom: 1px solid rgba(168, 85, 247, 0.12);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.code-block-header .lang-label {
+  color: var(--neon-magenta);
+  font-weight: 600;
+}
+.code-block-header .dots {
+  display: flex;
+  gap: 5px;
+}
+.code-block-header .dots span {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+.code-block-header .dots .dot-red { background: #ff6b6b; }
+.code-block-header .dots .dot-yellow { background: #ffd96a; }
+.code-block-header .dots .dot-green { background: #6dc781; }
+/* 代码块内语法高亮 */
+.hl-keyword { color: #c084fc; }
+.hl-func { color: #6eb5ff; }
+.hl-string { color: #6dc781; }
+.hl-comment { color: rgba(255,255,255,0.3); font-style: italic; }
+.hl-number { color: #ffd96a; }
+.hl-type { color: #ff85c0; }
+.hl-operator { color: #ff6eb4; }
+.chat-msg.assistant .msg-bubble strong { color: var(--neon-purple); }
+.chat-msg .msg-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-family: var(--font-mono);
+}
+
+/* Tool call tag in chat */
+.tool-call-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-family: var(--font-body);
+  background: rgba(255,45,149,0.08);
+  border: 1px solid rgba(255,45,149,0.2);
+  color: var(--neon-magenta);
+  margin: 8px 0;
+  animation: neonPulse 3s ease infinite;
+}
+.tool-call-tag .tool-icon { font-size: 14px; }
+
+/* Token counter */
+.token-counter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--neon-purple);
+  background: rgba(180,77,255,0.08);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(180,77,255,0.2);
+}
+
+/* Chat input */
+.chat-input-area {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+  background: rgba(78,205,196,0.02);
+}
+.chat-input-area .neon-input {
+  border-radius: var(--radius-xl);
+  resize: none;
+  min-height: 44px;
+  max-height: 120px;
+}
+.send-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--neon-cyan);
+  background: linear-gradient(135deg, var(--neon-cyan), rgba(0,180,200,1));
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-normal);
+  flex-shrink: 0;
+  animation: neonPulse 2.5s ease-in-out infinite;
+  position: relative;
+}
+.send-btn:hover {
+  box-shadow: var(--glow-cyan);
+  transform: scale(1.08);
+}
+.send-btn .sparkle-decor {
+  top: -4px; right: -4px;
+  animation: twinkle 1.5s ease infinite;
+}
+
+/* ============================================================
+   PAGE 3: LIBRARY
+   ============================================================ */
+.library-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: var(--space-lg);
+  min-height: 80vh;
+}
+.library-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.topic-list { list-style: none; }
+.topic-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+.topic-item:hover {
+  background: rgba(180,77,255,0.05);
+  border-color: rgba(180,77,255,0.15);
+}
+.topic-item.active {
+  background: linear-gradient(135deg, rgba(180,77,255,0.1), rgba(255,45,149,0.05));
+  border-color: rgba(180,77,255,0.35);
+}
+.topic-item .topic-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.topic-item.active .topic-name {
+  color: var(--neon-purple);
+  font-weight: 600;
+}
+.topic-item .topic-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: rgba(0,0,0,0.06);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+}
+.topic-item.active .topic-count {
+  background: rgba(180,77,255,0.15);
+  color: var(--neon-purple);
+}
+.library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+.library-header h3 {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: 18px;
+}
+.sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 2px solid var(--neon-purple);
+  border-radius: var(--radius-pill);
+  background: rgba(180,77,255,0.08);
+  color: var(--neon-purple);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  font-family: var(--font-rounded);
+}
+.sync-btn:hover {
+  background: rgba(180,77,255,0.15);
+  box-shadow: var(--glow-purple);
+}
+.sync-btn .sync-icon {
+  display: inline-block;
+  font-size: 14px;
+}
+.sync-btn:hover .sync-icon {
+  animation: spin 1s linear infinite;
+}
+
+/* Paper cards */
+.paper-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-lg);
+}
+.paper-card {
+  padding: var(--space-lg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-normal);
+  cursor: pointer;
+}
+.paper-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    rgba(78,205,196,0.04) 20%,
+    rgba(180,77,255,0.06) 40%,
+    rgba(255,45,149,0.04) 60%,
+    rgba(255,224,51,0.04) 80%,
+    transparent 100%
+  );
+  background-size: 300% 300%;
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+.paper-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(180,77,255,0.3);
+  box-shadow: var(--glow-purple), 0 16px 32px rgba(0,0,0,0.06);
+}
+.paper-card:hover::before {
+  opacity: 1;
+  animation: holoShimmer 2s ease;
+}
+.paper-card .paper-status {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.paper-card .paper-title {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  padding-right: 60px;
+}
+.paper-card .paper-authors {
+  font-size: 12px;
+  color: #4a4a6a;
+  margin-bottom: var(--space-sm);
+  text-shadow: 0 0 0.3px rgba(0,0,0,0.15);
+}
+.paper-card .paper-abstract {
+  font-size: 13px;
+  color: #3a3a5a;
+  line-height: 1.7;
+  margin-bottom: var(--space-md);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-text-stroke: 0.15px rgba(0,0,0,0.08);
+  paint-order: stroke fill;
+  text-shadow: 0 0 0.3px rgba(0,0,0,0.2);
+}
+.paper-card .paper-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.paper-card .paper-year {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.paper-card .paper-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+.paper-card .action-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+.paper-card .action-btn:hover {
+  border-color: var(--neon-magenta);
+  color: var(--neon-magenta);
+  background: rgba(255,45,149,0.08);
+  box-shadow: 0 0 12px rgba(255,45,149,0.2);
+}
+
+/* Status badge colors */
+.neon-badge.status-unread { background: rgba(78,205,196,0.1); border-color: rgba(78,205,196,0.22); color: #009da8; }
+.neon-badge.status-reading { background: rgba(255,224,51,0.15); border-color: rgba(255,224,51,0.3); color: #b8a200; }
+.neon-badge.status-done { background: rgba(57,255,20,0.1); border-color: rgba(57,255,20,0.3); color: #2dbe0e; }
+.neon-badge.status-reread { background: rgba(180,77,255,0.12); border-color: rgba(180,77,255,0.3); color: var(--neon-purple); }
+
+/* ============================================================
+   PAGE 4: SETTINGS
+   ============================================================ */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+.settings-card {
+  padding: var(--space-lg);
+}
+.settings-card .card-title {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-card .card-title .card-icon { font-size: 20px; }
+.settings-card .card-title .sparkle-emoji { font-size: 14px; animation: twinkle 2s ease infinite; display: inline-block; }
+
+/* Health check */
+.health-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.health-item:last-child { border-bottom: none; }
+.health-item .health-label {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.health-item .health-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+.health-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+.health-dot.healthy {
+  background: var(--neon-green);
+  box-shadow: 0 0 8px rgba(57,255,20,0.6);
+  animation: neonPulse 2s ease infinite;
+}
+.health-dot.warning {
+  background: var(--neon-yellow);
+  box-shadow: 0 0 8px rgba(255,224,51,0.6);
+}
+.health-dot.error {
+  background: var(--neon-magenta);
+  box-shadow: 0 0 8px rgba(255,45,149,0.6);
+}
+
+/* System info terminal */
+.system-info-grid {
+  display: grid;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.system-info-grid .info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+.system-info-grid .info-row:nth-child(odd) {
+  background: rgba(0,0,0,0.02);
+}
+.system-info-grid .info-label { color: var(--text-muted); }
+.system-info-grid .info-value { color: var(--text-primary); font-weight: 600; }
+.system-info-grid .info-value.cyan { color: var(--neon-cyan); }
+.system-info-grid .info-value.purple { color: var(--neon-purple); }
+.system-info-grid .info-value.magenta { color: var(--neon-magenta); }
+
+/* Skill management */
+.skill-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.skill-item:last-child { border-bottom: none; }
+.skill-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.skill-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.skill-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Self evolution section */
+.evolution-card {
+  text-align: center;
+  padding: var(--space-2xl);
+}
+.evolution-card .evo-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-md);
+  display: block;
+  animation: floatUp 3s ease infinite;
+}
+.evolution-card .evo-title {
+  font-family: var(--font-rounded);
+  font-weight: 800;
+  font-size: 20px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--neon-yellow), var(--neon-magenta));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.evolution-card .evo-desc {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: var(--space-lg);
+}
+.evo-level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.evo-level .level-pip {
+  width: 24px; height: 8px;
+  border-radius: var(--radius-pill);
+  background: #e0e0ea;
+  transition: var(--transition-normal);
+}
+.evo-level .level-pip.filled {
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+  box-shadow: 0 0 8px rgba(78,205,196,0.3);
+}
+
+/* Migration section */
+.migration-progress {
+  margin-top: var(--space-md);
+}
+.migration-progress .progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.migration-progress .progress-label span:last-child {
+  font-family: var(--font-mono);
+  color: var(--neon-purple);
+}
+.progress-bar {
+  height: 8px;
+  background: #e0e0ea;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+}
+.progress-bar .fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple), var(--neon-magenta));
+  background-size: 200% auto;
+  animation: gradientShift 3s ease infinite;
+  transition: width 0.8s var(--ease-smooth);
+}
+
+/* ============================================================
+   PAGE 5: DESIGN TOKENS
+   ============================================================ */
+.tokens-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2xl);
+}
+.token-block {
+  padding: var(--space-xl);
+}
+.token-block .block-title {
+  font-family: var(--font-rounded);
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Color palette */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-sm);
+}
+.palette-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.palette-swatch .swatch-color {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(255,255,255,0.6);
+  position: relative;
+  transition: var(--transition-normal);
+}
+.palette-swatch .swatch-color:hover {
+  transform: scale(1.08);
+}
+.palette-swatch .swatch-color.glow-cyan { background: var(--neon-cyan); box-shadow: 0 0 20px rgba(78,205,196,0.4); }
+.palette-swatch .swatch-color.glow-magenta { background: var(--neon-magenta); box-shadow: 0 0 20px rgba(255,45,149,0.5); }
+.palette-swatch .swatch-color.glow-yellow { background: var(--neon-yellow); box-shadow: 0 0 20px rgba(255,224,51,0.5); }
+.palette-swatch .swatch-color.glow-purple { background: var(--neon-purple); box-shadow: 0 0 20px rgba(180,77,255,0.5); }
+.palette-swatch .swatch-color.glow-green { background: var(--neon-green); box-shadow: 0 0 20px rgba(57,255,20,0.5); }
+.palette-swatch .swatch-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.palette-swatch .swatch-hex {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   B站大会员专属弹幕色系
+   ============================================================ */
+.bili-danmaku-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+.bili-danmaku-card {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #0d0d1a;
+  padding: var(--space-lg) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.bili-danmaku-preview {
+  font-family: var(--font-rounded);
+  font-size: 20px;
+  font-weight: 800;
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: biliDanmakuFlow 6s linear infinite;
+  white-space: nowrap;
+}
+.bili-danmaku-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.bili-danmaku-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.bili-danmaku-code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+/* 鎏金 */
+.bili-liujin {
+  background-image: linear-gradient(90deg, #ff9a56, #ffd96a, #ffb347, #ffcf7d, #f0a030, #ff9a56);
+  filter: drop-shadow(0 0 6px rgba(255, 186, 73, 0.5));
+}
+/* 炫酷粉蓝 */
+.bili-pinkblue {
+  background-image: linear-gradient(90deg, #ff6eb4, #6eb5ff, #ff85c0, #5eaeff, #ff6eb4);
+  filter: drop-shadow(0 0 6px rgba(110, 181, 255, 0.5));
+}
+/* 星穹蓝 */
+.bili-xingqiong {
+  background-image: linear-gradient(90deg, #1e3a6e, #4a8eff, #2860b8, #6eaaff, #1e3a6e);
+  filter: drop-shadow(0 0 8px rgba(74, 142, 255, 0.6));
+}
+/* 幻紫 */
+.bili-huanzi {
+  background-image: linear-gradient(90deg, #a855f7, #ec4899, #c084fc, #f472b6, #a855f7);
+  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.5));
+}
+/* 冰晶 */
+.bili-bingjing {
+  background-image: linear-gradient(90deg, #00d4ff, #7c3aed, #00bfff, #8b5cf6, #00d4ff);
+  filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.5));
+}
+/* 热情 */
+.bili-rengong {
+  background-image: linear-gradient(90deg, #ff6b6b, #ffa07a, #ff4500, #ff8c69, #ff6b6b);
+  filter: drop-shadow(0 0 6px rgba(255, 107, 107, 0.5));
+}
+
+/* 弹幕流光模拟舞台 */
+.bili-danmaku-stage {
+  position: relative;
+  height: 200px;
+  background: linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 100%);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.bili-dm-flow {
+  position: absolute;
+  left: 100%;
+  white-space: nowrap;
+  animation: dmScrollLeft linear infinite;
+}
+.bili-dm-text {
+  font-family: var(--font-rounded);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: var(--radius-sm);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: biliDanmakuFlow 5s linear infinite;
+}
+.bili-dm-flow .bili-dm-text.bili-liujin {
+  background-image: linear-gradient(90deg, #ff9a56, #ffd96a, #ffb347, #ffcf7d, #f0a030, #ff9a56);
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+.bili-dm-flow .bili-dm-text.bili-pinkblue {
+  background-image: linear-gradient(90deg, #ff6eb4, #6eb5ff, #ff85c0, #5eaeff, #ff6eb4);
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+.bili-dm-flow .bili-dm-text.bili-huanzi {
+  background-image: linear-gradient(90deg, #a855f7, #ec4899, #c084fc, #f472b6, #a855f7);
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+.bili-dm-flow .bili-dm-text.bili-xingqiong {
+  background-image: linear-gradient(90deg, #1e3a6e, #4a8eff, #2860b8, #6eaaff, #1e3a6e);
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+.bili-dm-flow .bili-dm-text.bili-rengong {
+  background-image: linear-gradient(90deg, #ff6b6b, #ffa07a, #ff4500, #ff8c69, #ff6b6b);
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+@keyframes dmScrollLeft {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(calc(-100% - 100vw)); }
+}
+
+/* Typography */
+.type-scale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.type-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-light);
+}
+.type-item:last-child { border-bottom: none; }
+.type-sample {
+  font-weight: 700;
+  line-height: 1.2;
+  flex-shrink: 0;
+  min-width: 180px;
+}
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.type-meta span { display: block; }
+
+/* Component examples */
+.component-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.component-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+.component-group-label {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+/* Animation demos */
+.animation-demos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+.animation-demo-item {
+  text-align: center;
+  padding: var(--space-lg);
+}
+.animation-demo-item .demo-title {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+.demo-neon-pulse {
+  width: 60px; height: 60px;
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+  animation: neonPulse 2s ease infinite;
+}
+.demo-holo-shimmer {
+  width: 100%; height: 60px;
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    135deg,
+    rgba(78,205,196,0.22) 0%,
+    rgba(180,77,255,0.3) 25%,
+    rgba(255,45,149,0.3) 50%,
+    rgba(255,224,51,0.3) 75%,
+    rgba(78,205,196,0.22) 100%
+  );
+  background-size: 400% 400%;
+  animation: holoShimmer 3s ease infinite;
+}
+.demo-sparkle {
+  width: 60px; height: 60px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  animation: twinkle 1.5s ease infinite;
+}
+.demo-float {
+  width: 60px; height: 60px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,45,149,0.3), rgba(255,224,51,0.3));
+  border: 2px solid rgba(255,45,149,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  animation: floatUp 3s ease infinite;
+}
+.demo-border-glow {
+  width: 100%; height: 60px;
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 2px solid transparent;
+  animation: borderGlow 4s ease infinite;
+}
+.demo-gradient-shift {
+  width: 100%; height: 60px;
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple), var(--neon-magenta), var(--neon-yellow), var(--neon-cyan));
+  background-size: 300% auto;
+  animation: gradientShift 3s ease infinite;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.footer {
+  text-align: center;
+  padding: var(--space-3xl) var(--space-2xl);
+  border-top: 1px solid var(--border-light);
+  position: relative;
+  z-index: 1;
+}
+.footer-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.footer-text .heart {
+  color: var(--neon-magenta);
+  animation: neonPulse 2s ease infinite;
+  display: inline-block;
+}
+.footer-brand {
+  font-family: var(--font-rounded);
+  font-weight: 800;
+  /* B站大会员弹幕：炫酷粉蓝 */
+  background: linear-gradient(90deg, #ff6eb4, #6eb5ff, #ff85c0, #5eaeff, #ff6eb4);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: biliDanmakuFlow 12s linear infinite;
+  -webkit-text-stroke: 0.2px rgba(255, 110, 180, 0.06);
+  paint-order: stroke fill;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     FLOATING PARTICLES
+     ============================================================ -->
+<div class="particles-container">
+  <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+  <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+  <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+  <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+  <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+  <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+  <div class="particle"></div><div class="particle"></div>
+</div>
+
+<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <span class="brand-icon brand-icon--sm">🐂</span>
+      核动力科研牛马
+    </div>
+    <ul class="nav-links">
+      <li><a href="#hero" class="active"><span class="nav-icon">🏠</span> 首页</a></li>
+      <li><a href="#chat"><span class="nav-icon">💬</span> 对话</a></li>
+      <li><a href="#library"><span class="nav-icon">📚</span> 论文库</a></li>
+      <li><a href="#settings"><span class="nav-icon">⚙️</span> 设置</a></li>
+      <li><a href="#tokens"><span class="nav-icon">🎨</span> 设计规范</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ============================================================
+     PAGE 1: HERO / LANDING
+     ============================================================ -->
+<section id="hero" class="page-section hero">
+  <div class="hero-bg-gradient"></div>
+
+  <span class="brand-icon brand-icon--lg">🐂</span>
+
+  <h1 class="hero-title">
+    核动力科研牛马 <span class="hero-version">v3.0</span>
+  </h1>
+  <p class="hero-tagline">
+    <strong>学术论文精读工具</strong> — Go + Rust + TypeScript 多语言架构<br>
+    前端 React 18 + Vite 5 · 状态管理 Zustand · 样式 TailwindCSS
+  </p>
+
+  <!-- Architecture -->
+  <div class="arch-grid">
+    <div class="arch-card holo-card">
+      <span class="arch-icon">⚛️</span>
+      <div class="arch-name">Frontend</div>
+      <div class="arch-tech">React 18 + TypeScript</div>
+    </div>
+    <div class="arch-arrow"><i class="arrow-symbol">⟷</i></div>
+    <div class="arch-card holo-card">
+      <span class="arch-icon">🔧</span>
+      <div class="arch-name">Backend</div>
+      <div class="arch-tech">Go + Gin</div>
+    </div>
+    <div class="arch-arrow"><i class="arrow-symbol">⟷</i></div>
+    <div class="arch-card holo-card">
+      <span class="arch-icon">⚡</span>
+      <div class="arch-name">Core</div>
+      <div class="arch-tech">Rust + PyO3</div>
+    </div>
+  </div>
+
+  <!-- Quick Start -->
+  <div class="quickstart-grid">
+    <div class="quickstart-card holo-card">
+      <div class="card-header">
+        <span class="step-num cyan-bg">1</span>
+        <span class="card-title">启动 Core (Rust)</span>
+      </div>
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">terminal</span>
+        </div>
+        <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">cd</span> core && <span class="cmd">cargo</span> <span class="flag">run</span> <span class="flag">--release</span>
+<span class="comment"># Core engine started on :8081</span>
+<span class="comment"># ✓ NLP pipeline ready</span>
+<span class="comment"># ✓ Embedding model loaded</span></div>
+      </div>
+    </div>
+
+    <div class="quickstart-card holo-card">
+      <div class="card-header">
+        <span class="step-num magenta-bg">2</span>
+        <span class="card-title">启动 Backend (Go)</span>
+      </div>
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">terminal</span>
+        </div>
+        <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">cd</span> backend && <span class="cmd">go</span> <span class="flag">run</span> <span class="flag">main.go</span>
+<span class="comment"># Server started on :8080</span>
+<span class="comment"># ✓ Connected to Core gRPC</span>
+<span class="comment"># ✓ Database migration complete</span></div>
+      </div>
+    </div>
+
+    <div class="quickstart-card holo-card">
+      <div class="card-header">
+        <span class="step-num purple-bg">3</span>
+        <span class="card-title">启动 Frontend (React)</span>
+      </div>
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">terminal</span>
+        </div>
+        <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">cd</span> frontend && <span class="cmd">pnpm</span> <span class="flag">dev</span>
+<span class="comment"># VITE v5.4 ready in 320ms</span>
+<span class="comment"># ➜ Local: http://localhost:5173</span>
+<span class="comment"># ✓ API proxy → :8080</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PAGE 2: CHAT
+     ============================================================ -->
+<section id="chat" class="page-section">
+  <div class="section-label">// chat.page</div>
+  <h2 class="section-title">对话</h2>
+  <p class="section-desc">AI 科研助手对话界面，支持论文精读、知识问答、文献分析。消息气泡采用动漫风格设计，配合霓虹辉光边框。</p>
+
+  <div class="chat-layout">
+    <!-- Sidebar -->
+    <div class="chat-sidebar">
+      <div class="sidebar-header">
+        <h3>💬 对话列表</h3>
+        <button class="new-chat-btn" title="新建对话">+</button>
+      </div>
+      <ul class="session-list">
+        <li class="session-item">
+          <div class="session-title">Attention机制深入分析</div>
+          <div class="session-time">2025-01-15 14:32</div>
+        </li>
+        <li class="session-item active">
+          <div class="session-title">Transformer架构论文精读</div>
+          <div class="session-time">2025-01-15 15:08</div>
+        </li>
+        <li class="session-item">
+          <div class="session-title">RLHF训练流程讨论</div>
+          <div class="session-time">2025-01-14 10:22</div>
+        </li>
+        <li class="session-item">
+          <div class="session-title">扩散模型 DDPM 原理</div>
+          <div class="session-time">2025-01-13 09:45</div>
+        </li>
+        <li class="session-item">
+          <div class="session-title">MoE混合专家模型调研</div>
+          <div class="session-time">2025-01-12 16:30</div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="chat-main">
+      <div class="chat-header">
+        <div class="chat-title">Transformer架构论文精读</div>
+        <div class="chat-status">
+          <div class="status-dot"></div>
+          <span>模型就绪</span>
+          <div class="streaming-indicator">
+            <span></span><span></span><span></span>
+          </div>
+          <span class="token-counter">1,247 tokens</span>
+        </div>
+      </div>
+
+      <div class="chat-messages">
+        <!-- User message -->
+        <div class="chat-msg user">
+          <img src="monocle-capitalist-icon.jpg" class="brand-icon--avatar-img" alt="user">
+          <div>
+            <div class="msg-bubble">请帮我精读这篇 Transformer 论文《Attention Is All You Need》，重点分析自注意力机制的数学原理和代码实现。</div>
+            <div class="msg-meta" style="text-align:right">14:32 · 78 tokens</div>
+          </div>
+        </div>
+
+        <!-- Assistant message -->
+        <div class="chat-msg assistant">
+          <span class="brand-icon brand-icon--avatar">🐂</span>
+          <div>
+            <div class="msg-bubble">
+              <p>好的！我来为你深入分析这篇开创性的论文。</p>
+              <p><strong>核心贡献</strong>：完全基于注意力机制，抛弃了 RNN/CNN 的序列建模范式。</p>
+              <p>自注意力机制的核心公式：</p>
+              <p style="text-align:center;font-size:16px;">$$\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^T}{\sqrt{d_k}}\right) V$$</p>
+              <p>其中 $Q$、$K$、$V$ 分别是 Query、Key、Value 矩阵，$d_k$ 是 Key 的维度。除以 $\sqrt{d_k}$ 是为了防止点积过大导致 softmax 梯度消失。</p>
+
+              <div class="tool-call-tag">
+                <span class="tool-icon">🔧</span>
+                search_paper — 检索到 3 篇相关论文
+              </div>
+
+              <p><strong>多头注意力</strong>（Multi-Head Attention）将 Q、K、V 分别映射到 $h$ 个子空间：</p>
+              <p style="text-align:center;font-size:16px;">$$\text{MultiHead}(Q,K,V) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\,W^O$$</p>
+              <p>每个 head 使用不同的投影矩阵，使模型能关注不同位置的不同表示子空间。</p>
+              <p>PyTorch 实现核心代码：</p>
+              <pre><div class="code-block-header"><div class="dots"><span class="dot-red"></span><span class="dot-yellow"></span><span class="dot-green"></span></div><span class="lang-label">python</span></div><code><span class="hl-keyword">import</span> torch
+<span class="hl-keyword">import</span> torch.nn <span class="hl-keyword">as</span> nn
+<span class="hl-keyword">import</span> torch.nn.functional <span class="hl-keyword">as</span> F
+<span class="hl-keyword">import</span> math
+
+<span class="hl-keyword">class</span> <span class="hl-type">ScaledDotProductAttention</span>(nn.Module):
+    <span class="hl-keyword">def</span> <span class="hl-func">__init__</span>(self, d_k):
+        <span class="hl-func">super</span>().__init__()
+        self.d_k = d_k
+
+    <span class="hl-keyword">def</span> <span class="hl-func">forward</span>(self, Q, K, V, mask=<span class="hl-keyword">None</span>):
+        scores = torch.matmul(Q, K.transpose(-<span class="hl-number">2</span>, -<span class="hl-number">1</span>))
+        scores = scores / math.sqrt(self.d_k)
+        <span class="hl-keyword">if</span> mask <span class="hl-keyword">is not None</span>:
+            scores = scores.masked_fill(mask == <span class="hl-number">0</span>, -<span class="hl-number">1e9</span>)
+        attn = F.softmax(scores, dim=-<span class="hl-number">1</span>)
+        <span class="hl-keyword">return</span> torch.matmul(attn, V)</code></pre>
+            </div>
+            <div class="msg-meta">14:33 · 847 tokens · 工具调用 1 次</div>
+          </div>
+        </div>
+
+        <!-- User message 2 -->
+        <div class="chat-msg user">
+          <img src="monocle-capitalist-icon.jpg" class="brand-icon--avatar-img" alt="user">
+          <div>
+            <div class="msg-bubble">位置编码（Positional Encoding）为什么用正弦函数？和可学习位置编码相比有什么优劣？</div>
+            <div class="msg-meta" style="text-align:right">14:35 · 42 tokens</div>
+          </div>
+        </div>
+
+        <!-- Assistant message 2 -->
+        <div class="chat-msg assistant">
+          <span class="brand-icon brand-icon--avatar">🐂</span>
+          <div>
+            <div class="msg-bubble">
+              <p>论文使用<strong>正弦位置编码</strong>的原因：</p>
+              <p style="text-align:center;font-size:15px;">$$\text{PE}(pos, 2i) = \sin\!\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)$$</p>
+              <p style="text-align:center;font-size:15px;">$$\text{PE}(pos, 2i+1) = \cos\!\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)$$</p>
+              <p><strong>优势</strong>：允许模型外推到训练时未见过更长序列长度（虽然实际效果有限）。正弦函数的线性变换特性使得模型可以学习相对位置关系。</p>
+              <p><strong>与可学习位置编码对比</strong>：现代实践中（如 GPT、BERT），可学习位置编码更常用，因为它更灵活。但正弦编码无需训练参数，泛化性理论上更好。</p>
+
+              <div class="tool-call-tag">
+                <span class="tool-icon">📄</span>
+                read_paper — 提取第 3.5 节内容
+              </div>
+
+              <p>在当前大模型实践中，<strong>RoPE</strong>（旋转位置编码）结合了二者的优点，已成为主流方案。</p>
+            </div>
+            <div class="msg-meta">14:36 · 1,102 tokens · 工具调用 2 次</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input type="text" class="neon-input" placeholder="输入你的研究问题... (Shift+Enter 换行)" />
+        <button class="send-btn">
+          ✦
+          <div class="sparkle-decor"></div>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PAGE 3: LIBRARY
+     ============================================================ -->
+<section id="library" class="page-section">
+  <div class="section-label">// library.page</div>
+  <h2 class="section-title">论文库</h2>
+  <p class="section-desc">学术论文收藏管理，支持主题分类、阅读状态追踪、全文搜索。卡片悬停时呈现全息渐变效果。</p>
+
+  <div class="library-layout">
+    <!-- Sidebar -->
+    <div class="library-sidebar">
+      <div class="sidebar-header">
+        <h3>📁 主题分类</h3>
+      </div>
+      <ul class="topic-list">
+        <li class="topic-item">
+          <span class="topic-name">全部论文</span>
+          <span class="topic-count">42</span>
+        </li>
+        <li class="topic-item active">
+          <span class="topic-name">Transformer</span>
+          <span class="topic-count">12</span>
+        </li>
+        <li class="topic-item">
+          <span class="topic-name">扩散模型</span>
+          <span class="topic-count">8</span>
+        </li>
+        <li class="topic-item">
+          <span class="topic-name">强化学习</span>
+          <span class="topic-count">7</span>
+        </li>
+        <li class="topic-item">
+          <span class="topic-name">图神经网络</span>
+          <span class="topic-count">6</span>
+        </li>
+        <li class="topic-item">
+          <span class="topic-name">LLM 对齐</span>
+          <span class="topic-count">5</span>
+        </li>
+        <li class="topic-item">
+          <span class="topic-name">多模态</span>
+          <span class="topic-count">4</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Main Library Area -->
+    <div>
+      <div class="library-header">
+        <h3>Transformer 主题 · 12 篇论文</h3>
+        <button class="sync-btn">
+          <span class="sync-icon">⟳</span>
+          同步文献库
+        </button>
+      </div>
+
+      <div class="paper-grid">
+        <!-- Paper Card 1 -->
+        <div class="paper-card">
+          <div class="paper-status">
+            <span class="neon-badge status-done">✓ 已读</span>
+          </div>
+          <div class="paper-title">Attention Is All You Need</div>
+          <div class="paper-authors">Vaswani, Shazeer, Parmar et al. · NeurIPS 2017</div>
+          <div class="paper-abstract">提出了完全基于注意力的 Transformer 架构，抛弃了传统的循环和卷积结构。通过多头自注意力和位置编码实现了并行化的序列建模，成为现代 NLP 和 CV 的基础架构。</div>
+          <div class="paper-footer">
+            <span class="paper-year">2017 · 引用 120,000+</span>
+            <div class="paper-actions">
+              <button class="action-btn" title="下载PDF">📥</button>
+              <button class="action-btn" title="收藏">⭐</button>
+              <button class="action-btn" title="更多">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Card 2 -->
+        <div class="paper-card">
+          <div class="paper-status">
+            <span class="neon-badge status-reading">📖 在读</span>
+          </div>
+          <div class="paper-title">BERT: Pre-training of Deep Bidirectional Transformers</div>
+          <div class="paper-authors">Devlin, Chang, Lee, Toutanova · NAACL 2019</div>
+          <div class="paper-abstract">提出通过掩码语言模型（MLM）和下一句预测（NSP）任务预训练双向 Transformer，在 11 项 NLP 基准任务上取得了 SOTA 成绩。</div>
+          <div class="paper-footer">
+            <span class="paper-year">2019 · 引用 85,000+</span>
+            <div class="paper-actions">
+              <button class="action-btn" title="下载PDF">📥</button>
+              <button class="action-btn" title="收藏">⭐</button>
+              <button class="action-btn" title="更多">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Card 3 -->
+        <div class="paper-card">
+          <div class="paper-status">
+            <span class="neon-badge status-unread">🔵 未读</span>
+          </div>
+          <div class="paper-title">RoFormer: Enhanced Transformer with Rotary Position Embedding</div>
+          <div class="paper-authors">Su, Lu, Shen et al. · arXiv 2021</div>
+          <div class="paper-abstract">提出旋转位置编码（RoPE），将绝对位置信息以旋转矩阵的形式编码到注意力计算中，同时保持了相对位置信息的表达能力。</div>
+          <div class="paper-footer">
+            <span class="paper-year">2021 · 引用 3,200+</span>
+            <div class="paper-actions">
+              <button class="action-btn" title="下载PDF">📥</button>
+              <button class="action-btn" title="收藏">⭐</button>
+              <button class="action-btn" title="更多">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Card 4 -->
+        <div class="paper-card">
+          <div class="paper-status">
+            <span class="neon-badge status-reread">🔄 重读</span>
+          </div>
+          <div class="paper-title">Scaling Laws for Neural Language Models</div>
+          <div class="paper-authors">Kaplan, McCandlish, Henighan et al. · arXiv 2020</div>
+          <div class="paper-abstract">系统研究了语言模型性能与模型规模、数据量、计算量之间的关系，揭示了Transformer的幂律缩放规律，对大模型的发展方向产生了深远影响。</div>
+          <div class="paper-footer">
+            <span class="paper-year">2020 · 引用 4,800+</span>
+            <div class="paper-actions">
+              <button class="action-btn" title="下载PDF">📥</button>
+              <button class="action-btn" title="收藏">⭐</button>
+              <button class="action-btn" title="更多">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Card 5 -->
+        <div class="paper-card">
+          <div class="paper-status">
+            <span class="neon-badge status-done">✓ 已读</span>
+          </div>
+          <div class="paper-title">GPT-4 Technical Report</div>
+          <div class="paper-authors">OpenAI · arXiv 2023</div>
+          <div class="paper-abstract">介绍了 GPT-4 大语言模型的能力评测和技术细节，展示了多模态能力、在各种基准测试上的 SOTA 表现，以及安全对齐方面的进展。</div>
+          <div class="paper-footer">
+            <span class="paper-year">2023 · 引用 15,000+</span>
+            <div class="paper-actions">
+              <button class="action-btn" title="下载PDF">📥</button>
+              <button class="action-btn" title="收藏">⭐</button>
+              <button class="action-btn" title="更多">⋯</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Card 6 -->
+        <div class="paper-card">
+          <div class="paper-status">
+            <span class="neon-badge status-reading">📖 在读</span>
+          </div>
+          <div class="paper-title">FlashAttention: Fast and Memory-Efficient Exact Attention</div>
+          <div class="paper-authors">Dao, Fu, Ermon et al. · NeurIPS 2022</div>
+          <div class="paper-abstract">通过 IO 感知的分块计算和重计算策略，在不牺牲准确性的前提下大幅降低注意力计算的时间和内存开销，实现了 2-4x 的 wall-clock 加速。</div>
+          <div class="paper-footer">
+            <span class="paper-year">2022 · 引用 2,100+</span>
+            <div class="paper-actions">
+              <button class="action-btn" title="下载PDF">📥</button>
+              <button class="action-btn" title="收藏">⭐</button>
+              <button class="action-btn" title="更多">⋯</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PAGE 4: SETTINGS
+     ============================================================ -->
+<section id="settings" class="page-section">
+  <div class="section-label">// settings.page</div>
+  <h2 class="section-title">设置</h2>
+  <p class="section-desc">系统健康监控、技能管理、自我进化与数据迁移。终端风格信息展示配合霓虹状态指示器。</p>
+
+  <div class="settings-grid">
+    <!-- Health Check -->
+    <div class="settings-card holo-card">
+      <div class="card-title">
+        <span class="card-icon">❤️</span>
+        系统健康检查
+      </div>
+      <div class="health-item">
+        <div class="health-label">Core Engine (Rust)</div>
+        <div class="health-status">
+          <div class="health-dot healthy"></div>
+          <span style="color:#2dbe0e">运行中</span>
+          <span class="neon-badge cyan">PID 28431</span>
+        </div>
+      </div>
+      <div class="health-item">
+        <div class="health-label">Backend API (Go)</div>
+        <div class="health-status">
+          <div class="health-dot healthy"></div>
+          <span style="color:#2dbe0e">运行中</span>
+          <span class="neon-badge cyan">:8080</span>
+        </div>
+      </div>
+      <div class="health-item">
+        <div class="health-label">Database (SQLite)</div>
+        <div class="health-status">
+          <div class="health-dot healthy"></div>
+          <span style="color:#2dbe0e">正常</span>
+          <span class="neon-badge green">42MB</span>
+        </div>
+      </div>
+      <div class="health-item">
+        <div class="health-label">Embedding Model</div>
+        <div class="health-status">
+          <div class="health-dot healthy"></div>
+          <span style="color:#2dbe0e">已加载</span>
+          <span class="neon-badge purple">768d</span>
+        </div>
+      </div>
+      <div class="health-item">
+        <div class="health-label">LLM Connection</div>
+        <div class="health-status">
+          <div class="health-dot warning"></div>
+          <span style="color:#b8a200">延迟偏高</span>
+          <span class="neon-badge yellow">~2.3s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Info -->
+    <div class="settings-card holo-card">
+      <div class="card-title">
+        <span class="card-icon">🖥️</span>
+        系统信息
+      </div>
+      <div class="system-info-grid">
+        <div class="info-row">
+          <span class="info-label">版本</span>
+          <span class="info-value cyan">v3.0.0-beta.4</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">架构</span>
+          <span class="info-value">3-tier (Rust+Go+React)</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Core</span>
+          <span class="info-value magenta">Rust 1.76.0-nightly</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Backend</span>
+          <span class="info-value cyan">Go 1.22.1</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Frontend</span>
+          <span class="info-value purple">React 18.3 + Vite 5.4</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">运行时间</span>
+          <span class="info-value">3d 14h 22m</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">内存占用</span>
+          <span class="info-value cyan">Core: 512MB / Backend: 128MB</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">论文数量</span>
+          <span class="info-value magenta">42 篇 · 6 个主题</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills Management -->
+    <div class="settings-card holo-card">
+      <div class="card-title">
+        <span class="card-icon">🛠️</span>
+        技能管理
+      </div>
+      <div class="skill-item">
+        <div class="skill-info">
+          <div class="skill-name">论文搜索</div>
+          <div class="skill-desc">arXiv / Semantic Scholar 检索</div>
+        </div>
+        <label class="neon-toggle">
+          <input type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="skill-item">
+        <div class="skill-info">
+          <div class="skill-name">全文精读</div>
+          <div class="skill-desc">PDF 解析与结构化摘要</div>
+        </div>
+        <label class="neon-toggle">
+          <input type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="skill-item">
+        <div class="skill-info">
+          <div class="skill-name">公式识别</div>
+          <div class="skill-desc">LaTeX 公式 OCR 提取</div>
+        </div>
+        <label class="neon-toggle">
+          <input type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="skill-item">
+        <div class="skill-info">
+          <div class="skill-name">图表分析</div>
+          <div class="skill-desc">论文图表理解与描述</div>
+        </div>
+        <label class="neon-toggle">
+          <input type="checkbox">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="skill-item">
+        <div class="skill-info">
+          <div class="skill-name">引用网络</div>
+          <div class="skill-desc">论文引用关系可视化</div>
+        </div>
+        <label class="neon-toggle">
+          <input type="checkbox">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Self Evolution + Data Migration -->
+    <div class="settings-card holo-card evolution-card">
+      <span class="evo-icon">✨</span>
+      <div class="evo-title">自我进化系统</div>
+      <div class="evo-desc">基于使用数据自动优化 prompt 策略和检索精度<br>每一次对话都在让牛马变得更聪明</div>
+      <div class="evo-level">
+        <div class="level-pip filled"></div>
+        <div class="level-pip filled"></div>
+        <div class="level-pip filled"></div>
+        <div class="level-pip filled"></div>
+        <div class="level-pip filled"></div>
+        <div class="level-pip filled"></div>
+        <div class="level-pip filled"></div>
+        <div class="level-pip"></div>
+        <div class="level-pip"></div>
+        <div class="level-pip"></div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);margin-top:8px;">进化等级 7/10 · 经验值 1,247</div>
+
+      <div class="migration-progress" style="margin-top:var(--space-xl);text-align:left;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:var(--space-sm);">📦 数据迁移</div>
+        <div class="progress-label">
+          <span>v2 → v3 数据迁移</span>
+          <span>87%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="fill" style="width:87%"></div>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-top:6px;">正在迁移: embedding_cache (342/400)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PAGE 5: DESIGN SYSTEM TOKENS
+     ============================================================ -->
+<section id="tokens" class="page-section">
+  <div class="section-label">// design.system</div>
+  <h2 class="section-title">设计规范</h2>
+  <p class="section-desc">Cyberpunk × Anime 风格设计系统。所有设计 token 均以 CSS 自定义属性定义，确保全局一致性与主题切换能力。</p>
+
+  <div class="tokens-section">
+    <!-- B站大会员专属弹幕色 -->
+    <div class="token-block holo-card">
+      <div class="block-title">🎬 B站大会员专属弹幕色系</div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:var(--space-lg);">
+        复刻自哔哩哔哩大会员专属渐变弹幕配色，流光动画模拟弹幕滚动效果。每色均可用于标题、品牌、强调文字。
+      </p>
+      <div class="bili-danmaku-grid">
+        <!-- 鎏金 -->
+        <div class="bili-danmaku-card">
+          <div class="bili-danmaku-preview bili-liujin">鎏金弹幕效果</div>
+          <div class="bili-danmaku-info">
+            <span class="bili-danmaku-name">鎏金</span>
+            <code class="bili-danmaku-code">#ff9a56 → #ffd96a → #ffb347</code>
+          </div>
+        </div>
+        <!-- 炫酷粉蓝 -->
+        <div class="bili-danmaku-card">
+          <div class="bili-danmaku-preview bili-pinkblue">炫酷粉蓝弹幕效果</div>
+          <div class="bili-danmaku-info">
+            <span class="bili-danmaku-name">炫酷粉蓝</span>
+            <code class="bili-danmaku-code">#ff6eb4 → #6eb5ff → #ff85c0</code>
+          </div>
+        </div>
+        <!-- 星穹蓝 -->
+        <div class="bili-danmaku-card">
+          <div class="bili-danmaku-preview bili-xingqiong">星穹蓝弹幕效果</div>
+          <div class="bili-danmaku-info">
+            <span class="bili-danmaku-name">星穹蓝</span>
+            <code class="bili-danmaku-code">#1e3a6e → #4a8eff → #2860b8</code>
+          </div>
+        </div>
+        <!-- 幻紫 -->
+        <div class="bili-danmaku-card">
+          <div class="bili-danmaku-preview bili-huanzi">幻紫弹幕效果</div>
+          <div class="bili-danmaku-info">
+            <span class="bili-danmaku-name">幻紫</span>
+            <code class="bili-danmaku-code">#a855f7 → #ec4899 → #c084fc</code>
+          </div>
+        </div>
+        <!-- 冰晶 -->
+        <div class="bili-danmaku-card">
+          <div class="bili-danmaku-preview bili-bingjing">冰晶弹幕效果</div>
+          <div class="bili-danmaku-info">
+            <span class="bili-danmaku-name">冰晶</span>
+            <code class="bili-danmaku-code">#00d4ff → #7c3aed → #00bfff</code>
+          </div>
+        </div>
+        <!-- 热情 -->
+        <div class="bili-danmaku-card">
+          <div class="bili-danmaku-preview bili-rengong">热情弹幕效果</div>
+          <div class="bili-danmaku-info">
+            <span class="bili-danmaku-name">热情</span>
+            <code class="bili-danmaku-code">#ff6b6b → #ffa07a → #ff4500</code>
+          </div>
+        </div>
+      </div>
+      <!-- 弹幕模拟动画区 -->
+      <div style="margin-top:var(--space-xl);">
+        <div class="component-group-label">弹幕流光模拟</div>
+        <div class="bili-danmaku-stage">
+          <div class="bili-dm-flow" style="top:18%;animation-duration:8s;">
+            <span class="bili-dm-text bili-liujin">这个配色也太绝了吧！</span>
+          </div>
+          <div class="bili-dm-flow" style="top:34%;animation-duration:10s;animation-delay:2s;">
+            <span class="bili-dm-text bili-pinkblue">前方高能预警！</span>
+          </div>
+          <div class="bili-dm-flow" style="top:50%;animation-duration:7s;animation-delay:0.5s;">
+            <span class="bili-dm-text bili-huanzi">核动力科研牛马启动！</span>
+          </div>
+          <div class="bili-dm-flow" style="top:66%;animation-duration:9s;animation-delay:3s;">
+            <span class="bili-dm-text bili-xingqiong">论文精读YYDS</span>
+          </div>
+          <div class="bili-dm-flow" style="top:82%;animation-duration:6s;animation-delay:1s;">
+            <span class="bili-dm-text bili-rengong">感谢大佬开源！</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Palette -->
+    <div class="token-block holo-card">
+      <div class="block-title">🎨 霓虹色彩系统</div>
+      <div class="palette-grid">
+        <div class="palette-swatch">
+          <div class="swatch-color glow-cyan"></div>
+          <div class="swatch-hex">#4ecdc4</div>
+          <div class="swatch-name">neon-cyan (teal)</div>
+        </div>
+        <div class="palette-swatch">
+          <div class="swatch-color glow-magenta"></div>
+          <div class="swatch-hex">#ff2d95</div>
+          <div class="swatch-name">neon-magenta</div>
+        </div>
+        <div class="palette-swatch">
+          <div class="swatch-color glow-yellow"></div>
+          <div class="swatch-hex">#ffe033</div>
+          <div class="swatch-name">neon-yellow</div>
+        </div>
+        <div class="palette-swatch">
+          <div class="swatch-color glow-purple"></div>
+          <div class="swatch-hex">#b44dff</div>
+          <div class="swatch-name">neon-purple</div>
+        </div>
+        <div class="palette-swatch">
+          <div class="swatch-color glow-green"></div>
+          <div class="swatch-hex">#39ff14</div>
+          <div class="swatch-name">neon-green</div>
+        </div>
+      </div>
+
+      <!-- Base colors -->
+      <div style="margin-top:var(--space-xl);">
+        <div class="component-group-label">Base Colors</div>
+        <div class="palette-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="palette-swatch">
+            <div class="swatch-color" style="background:#f8f9fc;border-color:#e0e0ea;"></div>
+            <div class="swatch-hex">#f8f9fc</div>
+            <div class="swatch-name">bg-primary</div>
+          </div>
+          <div class="palette-swatch">
+            <div class="swatch-color" style="background:#ffffff;border-color:#e0e0ea;"></div>
+            <div class="swatch-hex">#ffffff</div>
+            <div class="swatch-name">bg-secondary</div>
+          </div>
+          <div class="palette-swatch">
+            <div class="swatch-color" style="background:#1a1a2e;border-color:#2a2a4e;"></div>
+            <div class="swatch-hex">#1a1a2e</div>
+            <div class="swatch-name">text-primary</div>
+          </div>
+          <div class="palette-swatch">
+            <div class="swatch-color" style="background:#5a5a7a;border-color:#6a6a8a;"></div>
+            <div class="swatch-hex">#5a5a7a</div>
+            <div class="swatch-name">text-secondary</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Typography -->
+    <div class="token-block holo-card">
+      <div class="block-title">✏️ 字体排版系统</div>
+      <div class="type-scale">
+        <div class="type-item">
+          <div class="type-sample" style="font-size:42px;font-family:var(--font-rounded);">标题 H1</div>
+          <div class="type-meta">
+            <span>font-size: 42px / font-weight: 800</span>
+            <span>font-family: var(--font-rounded)</span>
+            <span>line-height: 1.2</span>
+          </div>
+        </div>
+        <div class="type-item">
+          <div class="type-sample" style="font-size:28px;font-family:var(--font-rounded);">标题 H2</div>
+          <div class="type-meta">
+            <span>font-size: 28px / font-weight: 700</span>
+            <span>font-family: var(--font-rounded)</span>
+          </div>
+        </div>
+        <div class="type-item">
+          <div class="type-sample" style="font-size:18px;">正文 Body</div>
+          <div class="type-meta">
+            <span>font-size: 18px / font-weight: 400</span>
+            <span>font-family: var(--font-body)</span>
+            <span>line-height: 1.7</span>
+          </div>
+        </div>
+        <div class="type-item">
+          <div class="type-sample" style="font-size:14px;font-family:var(--font-mono);color:var(--neon-cyan);">const x = 42;</div>
+          <div class="type-meta">
+            <span>font-size: 14px / font-family: mono</span>
+            <span>font-family: var(--font-mono)</span>
+          </div>
+        </div>
+        <div class="type-item">
+          <div class="type-sample" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">meta.caption</div>
+          <div class="type-meta">
+            <span>font-size: 12px / color: muted</span>
+            <span>font-family: var(--font-mono)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Components -->
+    <div class="token-block holo-card">
+      <div class="block-title">🧩 组件示例</div>
+      <div class="component-grid">
+        <!-- Buttons -->
+        <div>
+          <div class="component-group-label">Buttons</div>
+          <div class="component-group">
+            <button class="neon-btn">
+              <span class="sparkle-icon"></span>
+              主要操作
+            </button>
+            <button class="neon-btn magenta">
+              <span class="sparkle-icon"></span>
+              次要操作
+            </button>
+            <button class="neon-btn" style="border-color:var(--neon-purple);color:var(--neon-purple);background:linear-gradient(135deg,rgba(180,77,255,0.1),rgba(255,45,149,0.05));">
+              紫色变体
+            </button>
+          </div>
+        </div>
+
+        <!-- Badges -->
+        <div>
+          <div class="component-group-label">Badges / Tags</div>
+          <div class="component-group">
+            <span class="neon-badge cyan">✓ 在线</span>
+            <span class="neon-badge magenta">🔧 工具调用</span>
+            <span class="neon-badge yellow">⚠ 警告</span>
+            <span class="neon-badge purple">★ 推荐</span>
+            <span class="neon-badge green">● 健康</span>
+            <span class="neon-badge status-unread">🔵 未读</span>
+            <span class="neon-badge status-reading">📖 在读</span>
+            <span class="neon-badge status-done">✓ 已读</span>
+            <span class="neon-badge status-reread">🔄 重读</span>
+          </div>
+        </div>
+
+        <!-- Inputs -->
+        <div>
+          <div class="component-group-label">Inputs</div>
+          <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+            <input class="neon-input" placeholder="默认输入框..." />
+            <input class="neon-input" value="已聚焦状态示例" style="border-color:var(--neon-cyan);box-shadow:0 0 0 4px rgba(78,205,196,0.08),var(--glow-cyan);" />
+          </div>
+        </div>
+
+        <!-- Toggles -->
+        <div>
+          <div class="component-group-label">Toggles</div>
+          <div class="component-group" style="gap:16px;">
+            <label class="neon-toggle">
+              <input type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+            <label class="neon-toggle">
+              <input type="checkbox">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Terminal -->
+        <div style="width:100%;">
+          <div class="component-group-label">Terminal Block</div>
+          <div class="terminal-card" style="font-size:12px;">
+            <div class="terminal-header">
+              <span class="terminal-dot red"></span>
+              <span class="terminal-dot yellow"></span>
+              <span class="terminal-dot green"></span>
+              <span class="terminal-title">niuma.config</span>
+            </div>
+            <div class="terminal-body"><span class="keyword">{</span>
+  <span class="string">"model"</span>: <span class="string">"niuma-v3"</span>,
+  <span class="string">"max_tokens"</span>: <span class="flag">4096</span>,
+  <span class="string">"temperature"</span>: <span class="flag">0.7</span>,
+  <span class="string">"skills"</span>: [<span class="string">"search"</span>, <span class="string">"read"</span>, <span class="string">"summarize"</span>],
+  <span class="string">"evolution"</span>: { <span class="string">"enabled"</span>: <span class="flag">true</span>, <span class="string">"level"</span>: <span class="flag">7</span> }
+<span class="keyword">}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Animation Demos -->
+    <div class="token-block holo-card">
+      <div class="block-title">✨ 动画效果</div>
+      <div class="animation-demos">
+        <div class="animation-demo-item">
+          <div class="demo-neon-pulse"></div>
+          <div class="demo-title">neonPulse</div>
+          <div style="font-size:11px;color:var(--text-muted);">霓虹脉冲辉光效果</div>
+        </div>
+        <div class="animation-demo-item">
+          <div class="demo-holo-shimmer"></div>
+          <div class="demo-title">holoShimmer</div>
+          <div style="font-size:11px;color:var(--text-muted);">全息渐变闪光</div>
+        </div>
+        <div class="animation-demo-item">
+          <div class="demo-sparkle">✦</div>
+          <div class="demo-title">twinkle</div>
+          <div style="font-size:11px;color:var(--text-muted);">闪烁/星光效果</div>
+        </div>
+        <div class="animation-demo-item">
+          <span class="brand-icon brand-icon--md" style="animation: neonPulse 3s ease-in-out infinite, floatUp 3s ease-in-out infinite;">🐂</span>
+          <div class="demo-title">floatUp</div>
+          <div style="font-size:11px;color:var(--text-muted);">悬浮动画</div>
+        </div>
+        <div class="animation-demo-item">
+          <div class="demo-border-glow"></div>
+          <div class="demo-title">borderGlow</div>
+          <div style="font-size:11px;color:var(--text-muted);">边框颜色渐变</div>
+        </div>
+        <div class="animation-demo-item">
+          <div class="demo-gradient-shift"></div>
+          <div class="demo-title">gradientShift</div>
+          <div style="font-size:11px;color:var(--text-muted);">渐变位移动画</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="footer">
+  <span class="brand-icon brand-icon--md" style="margin-bottom:var(--space-md);animation: neonPulse 3s ease-in-out infinite, floatUp 3s ease-in-out infinite;">🐂</span>
+  <p class="footer-text">
+    <span class="footer-brand">核动力科研牛马 v3</span> · UI Design Showcase<br>
+    Crafted with <span class="heart">♥</span> · Cyberpunk × Anime Aesthetic<br>
+    <span style="margin-top:8px;display:inline-block;color:var(--text-muted);">React 18 + Vite 5 + Zustand + TailwindCSS · Go + Rust + TypeScript</span>
+  </p>
+</footer>
+
+</body>
+</html>
