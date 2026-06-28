@@ -1,47 +1,136 @@
 /** @type {import('tailwindcss').Config} */
-// Tailwind 配置。
-//
-// 痛点③修复要点：
-//   - 显式 CJK 字体栈注入到 font-family，杜绝拉丁字体回退导致的中文方框；
-//   - content 路径覆盖 src 全部 tsx，确保 purge 不漏；
-//   - 关闭 preflight 与 base 的冲突由 React 接管。
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       fontFamily: {
-        // CJK 字体栈：macOS PingFang → Windows YaHei → Linux Noto CJK → Source Han → 兜底 sans-serif
-        // 顺序很重要：系统优先匹配可用的，避免被拉丁字体截胡导致中文方框。
-        sans: [
-          '-apple-system',
-          'BlinkMacSystemFont',
-          '"PingFang SC"',
-          '"Microsoft YaHei"',
-          '"Noto Sans CJK SC"',
-          '"Source Han Sans CN"',
-          '"Helvetica Neue"',
-          'Arial',
-          'sans-serif',
-        ],
-        mono: [
-          '"JetBrains Mono"',
-          '"SFMono-Regular"',
-          'Menlo',
-          'Consolas',
-          '"Noto Sans Mono CJK SC"',
-          'monospace',
-        ],
+        body: ['"LXGW WenKai"', 'Kalam', '"PingFang SC"', '"Noto Sans SC"', 'system-ui', 'cursive'],
+        display: ['"Ma Shan Zheng"', 'Caveat', '"LXGW WenKai"', 'system-ui', 'cursive'],
+        mono: ['"JetBrains Mono"', '"Fira Code"', 'Consolas', 'monospace'],
+        rounded: ['Quicksand', 'Kalam', '"LXGW WenKai"', 'system-ui', 'cursive'],
       },
       colors: {
-        // 主题色：深色科研工具风格
-        brand: {
-          50: '#f5f7fa',
-          100: '#eaeef3',
-          500: '#4a6fa5',
-          600: '#3d5d8a',
-          700: '#2f4a6e',
-          900: '#1a2433',
+        'neon-cyan': '#4ecdc4',
+        'neon-magenta': '#ff2d95',
+        'neon-yellow': '#ffe033',
+        'neon-purple': '#b44dff',
+        'neon-green': '#39ff14',
+        'bg-primary': '#f8f9fc',
+        'bg-secondary': '#ffffff',
+        'bg-card': 'rgba(255, 255, 255, 0.85)',
+        'bg-elevated': 'rgba(255, 255, 255, 0.95)',
+        'text-primary': '#1a1a2e',
+        'text-secondary': '#5a5a7a',
+        'text-muted': '#9a9ab0',
+      },
+      spacing: {
+        xs: '4px',
+        sm: '8px',
+        md: '16px',
+        lg: '24px',
+        xl: '32px',
+        '2xl': '48px',
+        '3xl': '64px',
+      },
+      borderRadius: {
+        sm: '8px',
+        md: '14px',
+        lg: '20px',
+        xl: '28px',
+        pill: '999px',
+        bubble: '18px 18px 18px 4px',
+      },
+      boxShadow: {
+        'glow-cyan': '0 0 20px rgba(78, 205, 196, 0.3), 0 0 60px rgba(78, 205, 196, 0.08)',
+        'glow-magenta': '0 0 20px rgba(255, 45, 149, 0.35), 0 0 60px rgba(255, 45, 149, 0.1)',
+        'glow-yellow': '0 0 20px rgba(255, 224, 51, 0.35), 0 0 60px rgba(255, 224, 51, 0.1)',
+        'glow-purple': '0 0 20px rgba(180, 77, 255, 0.35), 0 0 60px rgba(180, 77, 255, 0.1)',
+      },
+      backgroundImage: {
+        'bili-liujin': 'linear-gradient(90deg, #ff9a56, #ffd96a, #ffb347, #ffcf7d, #f0a030)',
+        'bili-pinkblue': 'linear-gradient(90deg, #ff6eb4, #6eb5ff, #ff85c0, #5eaeff, #ff6eb4)',
+        'bili-xingqiong': 'linear-gradient(90deg, #1e3a6e, #4a8eff, #2860b8, #6eaaff, #1e3a6e)',
+        'bili-huanzi': 'linear-gradient(90deg, #a855f7, #ec4899, #c084fc, #f472b6, #a855f7)',
+        'bili-bingjing': 'linear-gradient(90deg, #00d4ff, #7c3aed, #00bfff, #8b5cf6, #00d4ff)',
+        'bili-rengong': 'linear-gradient(90deg, #ff6b6b, #ffa07a, #ff4500, #ff8c69, #ff6b6b)',
+      },
+      animation: {
+        'rainbow-black-flow': 'rainbowBlackFlow 12s linear infinite',
+        'bili-danmaku-flow': 'biliDanmakuFlow 8s linear infinite',
+        'holo-shimmer': 'holoShimmer 8s ease infinite',
+        'neon-pulse': 'neonPulse 3s ease-in-out infinite',
+        'neon-pulse-fast': 'neonPulse 2s ease-in-out infinite',
+        float: 'floatUp 3s ease-in-out infinite',
+        twinkle: 'twinkle 1.5s ease-in-out infinite',
+        sparkle: 'sparkle 2s ease infinite',
+        'border-glow': 'borderGlow 4s ease infinite',
+        'gradient-shift': 'gradientShift 3s ease infinite',
+        'particle-float': 'particleFloat 20s linear infinite',
+        spin: 'spin 1s linear infinite',
+      },
+      keyframes: {
+        rainbowBlackFlow: {
+          '0%': { backgroundPosition: '0% 50%' },
+          '100%': { backgroundPosition: '-200% 50%' },
         },
+        biliDanmakuFlow: {
+          '0%': { backgroundPosition: '100% 50%' },
+          '100%': { backgroundPosition: '-100% 50%' },
+        },
+        holoShimmer: {
+          '0%': { backgroundPosition: '200% 50%' },
+          '100%': { backgroundPosition: '-200% 50%' },
+        },
+        neonPulse: {
+          '0%, 100%': { filter: 'brightness(1)' },
+          '50%': { filter: 'brightness(1.3)' },
+        },
+        floatUp: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        twinkle: {
+          '0%, 100%': { opacity: '0.2', transform: 'scale(0.5)' },
+          '50%': { opacity: '1', transform: 'scale(1.2)' },
+        },
+        sparkle: {
+          '0%, 100%': { opacity: '0', transform: 'scale(0) rotate(0deg)' },
+          '50%': { opacity: '1', transform: 'scale(1) rotate(180deg)' },
+        },
+        borderGlow: {
+          '0%, 100%': { borderColor: 'rgba(0, 240, 255, 0.4)' },
+          '33%': { borderColor: 'rgba(180, 77, 255, 0.4)' },
+          '66%': { borderColor: 'rgba(255, 45, 149, 0.4)' },
+        },
+        gradientShift: {
+          '0%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+          '100%': { backgroundPosition: '0% 50%' },
+        },
+        particleFloat: {
+          '0%': { transform: 'translateY(110vh) translateX(0) scale(0)', opacity: '0' },
+          '10%': { opacity: '0.8', transform: 'translateY(90vh) translateX(20px) scale(1)' },
+          '50%': { opacity: '0.5', transform: 'translateY(50vh) translateX(-15px) scale(0.8)' },
+          '90%': { opacity: '0.3', transform: 'translateY(10vh) translateX(10px) scale(0.6)' },
+          '100%': { transform: 'translateY(-10vh) translateX(-5px) scale(0)', opacity: '0' },
+        },
+        spin: {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
+      },
+      opacity: {
+        6: '0.06',
+        7: '0.07',
+        8: '0.08',
+        12: '0.12',
+        15: '0.15',
+        18: '0.18',
+        35: '0.35',
+      },
+      transitionTimingFunction: {
+        bounce: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
     },
   },
