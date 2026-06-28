@@ -104,8 +104,8 @@ func TestSeedImportSeedPapers(t *testing.T) {
 	if level != "beginner" || paperType != "classic" || subDomain != "dl" {
 		t.Errorf("分类字段错误: level=%s type=%s sub=%s", level, paperType, subDomain)
 	}
-	if aiClassified != 0 {
-		t.Errorf("ai_classified 应为 0（人工预设），实际 %d", aiClassified)
+	if aiClassified != 1 {
+		t.Errorf("ai_classified 应为 1（人工预设=已分类），实际 %d", aiClassified)
 	}
 	if diff != 3 {
 		t.Errorf("difficulty_score 应为 3，实际 %d", diff)

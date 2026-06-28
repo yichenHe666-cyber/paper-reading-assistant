@@ -42,6 +42,12 @@ func Open(dbPath string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("启用外键约束失败: %w", err)
 	}
+	// busy_timeout：Go 与 Rust core 共享同一 SQLite 文件，并发写时一方可能拿到 SQLITE_BUSY。
+	// 设 5s 忙等待，让后到者自动重试而非立即报错（与 core 侧 15s 对齐，Go 侧略短避免 gin 超时）。
+	if _, err := db.Exec("PRAGMA busy_timeout=5000;"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("设置 busy_timeout 失败: %w", err)
+	}
 	return db, nil
 }
 

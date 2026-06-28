@@ -6,7 +6,7 @@
 //   - LLM 输出带前后解释文字时的提取；
 //   - difficulty_score 越界时钳制到 1-10；
 //   - 枚举值非法时回退安全默认；
-//   - ClassifyPaper 跳过 ai_classified=0 的人工预设论文；
+//   - ClassifyPaper 跳过 ai_classified=1 的已分类论文（AI 或人工预设）；
 //   - ClassifyPaper 对可分类论文的端到端落库；
 //   - ClassifyBatch 批量分类与幂等。
 //
@@ -170,20 +170,20 @@ func TestParseClassificationResult_NoJSON(t *testing.T) {
 	}
 }
 
-// TestClassifyPaper_SkipAIClassified0 验证 ai_classified=0 的人工预设论文被跳过：
+// TestClassifyPaper_SkipAIClassified1 验证 ai_classified=1 的已分类论文（人工预设/种子）被跳过：
 // LLM 不应被调用，数据库分类字段不应被改动。
-func TestClassifyPaper_SkipAIClassified0(t *testing.T) {
+func TestClassifyPaper_SkipAIClassified1(t *testing.T) {
 	repo, db, _ := openTestRepo(t)
 	defer db.Close()
 
-	// 写入一篇论文（UpsertPaperMeta 默认 ai_classified=1），再改为 0 并预设 level
+	// 写入一篇论文（UpsertPaperMeta 设 ai_classified=0=未分类），再改为 1 并预设 level（模拟人工预设/已分类）
 	if err := repo.UpsertPaperMeta(PaperMeta{
 		Title: "Seed Paper", ArxivID: "9999.00001", Source: "seed",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.db.Exec(
-		`UPDATE papers SET ai_classified=0, level='beginner', paper_type='survey' WHERE id='arxiv_9999.00001'`); err != nil {
+		`UPDATE papers SET ai_classified=1, level='beginner', paper_type='survey' WHERE id='arxiv_9999.00001'`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -194,7 +194,7 @@ func TestClassifyPaper_SkipAIClassified0(t *testing.T) {
 		t.Fatalf("ClassifyPaper 失败: %v", err)
 	}
 	if *hits != 0 {
-		t.Errorf("ai_classified=0 应跳过，LLM 不应被调用，实际调用 %d 次", *hits)
+		t.Errorf("ai_classified=1 应跳过，LLM 不应被调用，实际调用 %d 次", *hits)
 	}
 	// 验证人工预设的分类未被覆盖
 	row, err := repo.getPaperForClassification("arxiv_9999.00001")
@@ -204,12 +204,12 @@ func TestClassifyPaper_SkipAIClassified0(t *testing.T) {
 	if row.Level != "beginner" {
 		t.Errorf("人工 level 不应被覆盖: got %q want beginner", row.Level)
 	}
-	if row.AIClassified != 0 {
-		t.Errorf("ai_classified 不应变: got %d want 0", row.AIClassified)
+	if row.AIClassified != 1 {
+		t.Errorf("ai_classified 不应变: got %d want 1", row.AIClassified)
 	}
 }
 
-// TestClassifyPaper_Persist 验证对可分类论文（ai_classified=1）的端到端落库：
+// TestClassifyPaper_Persist 验证对可分类论文（ai_classified=0=未分类）的端到端落库：
 // LLM 被调用一次，分类字段被写入，ai_classified 置 1。
 func TestClassifyPaper_Persist(t *testing.T) {
 	repo, db, _ := openTestRepo(t)
@@ -221,7 +221,7 @@ func TestClassifyPaper_Persist(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// UpsertPaperMeta 设 ai_classified=1，不会被 ClassifyPaper 跳过
+	// UpsertPaperMeta 设 ai_classified=0（未分类），会被 ClassifyPaper 分类
 
 	resp := `{"level":"intermediate","paper_type":"classic","sub_domain":"nlp","difficulty_score":4,"tags":["BERT","NLP"],"reason":"需先学Transformer"}`
 	c, hits, _ := newMockLLMClient(t, resp)
@@ -253,25 +253,20 @@ func TestClassifyBatch(t *testing.T) {
 	repo, db, _ := openTestRepo(t)
 	defer db.Close()
 
-	// 两篇待分类论文：ai_classified=0 且 level=''
+	// 两篇待分类论文：UpsertPaperMeta 设 ai_classified=0=未分类（level 保持空）
 	for _, id := range []string{"1111.00001", "1111.00002"} {
 		if err := repo.UpsertPaperMeta(PaperMeta{
 			Title: "P-" + id, ArxivID: id, Source: "arxiv",
 		}); err != nil {
 			t.Fatal(err)
 		}
-		// UpsertPaperMeta 设 ai_classified=1，改回 0 以模拟未分类（level 保持空）
-		if _, err := repo.db.Exec(
-			`UPDATE papers SET ai_classified=0 WHERE id=?`, "arxiv_"+id); err != nil {
-			t.Fatal(err)
-		}
 	}
-	// 一篇种子论文：ai_classified=0 但 level 已设 → 不应被批次处理
+	// 一篇种子论文：ai_classified=1（人工预设）且 level 已设 → 不应被批次处理
 	if err := repo.UpsertPaperMeta(PaperMeta{Title: "Seed", ArxivID: "1111.00003", Source: "seed"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.db.Exec(
-		`UPDATE papers SET ai_classified=0, level='beginner' WHERE id='arxiv_1111.00003'`); err != nil {
+		`UPDATE papers SET ai_classified=1, level='beginner' WHERE id='arxiv_1111.00003'`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -289,7 +284,7 @@ func TestClassifyBatch(t *testing.T) {
 	if *hits != 2 {
 		t.Errorf("LLM 应被调用 2 次，实际 %d", *hits)
 	}
-	// 种子论文未被处理：level 仍为 beginner，ai_classified 仍为 0
+	// 种子论文未被处理：level 仍为 beginner，ai_classified 仍为 1
 	seed, _ := repo.getPaperForClassification("arxiv_1111.00003")
 	if seed.Level != "beginner" {
 		t.Errorf("种子论文 level 不应变: got %q want beginner", seed.Level)

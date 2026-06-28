@@ -5,7 +5,7 @@
 //
 // 设计要点：
 //   - Classify 是纯 LLM 调用 + JSON 解析，不碰数据库，便于单独测试解析逻辑；
-//   - ClassifyPaper 处理单篇：人工预设（ai_classified=0）的论文跳过，不覆盖人工分类；
+//   - ClassifyPaper 处理单篇：已分类（ai_classified=1，含 AI 分类与人工预设种子）的论文跳过；
 //   - ClassifyBatch 批量处理 ai_classified=0 且 level='' 的论文，逐条调用避免限流；
 //   - LLM 输出可能包裹在 markdown code block 或带前后解释文字，extractJSON 鲁棒提取。
 package paper
@@ -241,7 +241,8 @@ func (c *AIClassifier) classifyAndUpdate(ctx context.Context, repo *Repository,
 }
 
 // ClassifyPaper 对单篇论文分类。
-// 人工预设（ai_classified=0）的论文跳过，避免覆盖人工分类。
+// 已分类（ai_classified=1，含 AI 分类与人工预设种子）的论文跳过，避免重复分类与覆盖。
+// 待分类（ai_classified=0，来自数据源同步）的论文才会调用 LLM 分类。
 func (c *AIClassifier) ClassifyPaper(ctx context.Context, repo *Repository, paperID string) error {
 	row, err := repo.getPaperForClassification(paperID)
 	if err != nil {
@@ -250,8 +251,8 @@ func (c *AIClassifier) ClassifyPaper(ctx context.Context, repo *Repository, pape
 	if row == nil {
 		return fmt.Errorf("论文 %s 不存在", paperID)
 	}
-	if row.AIClassified == 0 {
-		// 人工预设，跳过
+	if row.AIClassified == 1 {
+		// 已分类（AI 或人工预设），跳过
 		return nil
 	}
 	return c.classifyAndUpdate(ctx, repo, paperID, row.Title, row.Abstract)

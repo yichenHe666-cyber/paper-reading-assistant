@@ -63,7 +63,8 @@ func (s *Server) deleteMemory(c *gin.Context) {
 		respondCoreError(c, err)
 		return
 	}
-	c.JSON(http.StatusNoContent, gin.H{"ok": true})
+	// 204 No Content 不应携带 body（与 Rust core delete_memory 一致）
+	c.Status(http.StatusNoContent)
 }
 
 // searchMemory GET /api/memory/search?keyword=&limit=

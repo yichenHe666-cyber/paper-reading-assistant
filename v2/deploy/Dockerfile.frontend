@@ -1,10 +1,8 @@
 # syntax=docker/dockerfile:1
 # 核动力科研牛马 v2 — 前端构建镜像。
 #
-# 两阶段：builder 用 node 构建 dist/ 静态产物；runtime 用 nginx 托管。
-# 若选择"Go 后端内嵌前端"模式，则不需要本镜像——backend Dockerfile 会
-# 在构建阶段 COPY frontend/dist 内嵌。这里提供 nginx 独立托管方案，
-# 便于前端独立部署或 CDN 分发。
+# 两阶段：builder 用 node 构建 dist/ 静态产物；runtime 用 nginx-unprivileged 托管。
+# nginx-unprivileged 镜像默认监听 8080，预配置非 root 运行所需的 pid/temp 路径。
 FROM node:20-alpine AS builder
 
 WORKDIR /src
@@ -19,38 +17,46 @@ COPY frontend/ ./
 RUN pnpm build
 
 # --- runtime ---
-FROM nginx:1.27-alpine AS runtime
+# 使用 nginxinc/nginx-unprivileged：默认 8080 端口、非 root、uid=101、
+# pid 与 temp 路径已预配置到 /tmp 与 /var/cache/nginx（uid 101 可写）
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 
-# nginx 配置：SPA history 模式 fallback + /api 反代到 backend
+# 拷贝构建产物到 nginx 默认 html 目录
 COPY --from=builder /src/dist /usr/share/nginx/html
 
-# 内联 nginx 配置（避免额外文件依赖）
-RUN printf 'server {\n\
-    listen 80;\n\
-    server_name _;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-    # SPA history 模式：所有非文件请求回退到 index.html\n\
-    location / {\n\
-        try_files $uri $uri/ /index.html;\n\
-    }\n\
-    # /api 反代到后端容器\n\
-    location /api/ {\n\
-        proxy_pass http://backend:8000;\n\
-        proxy_http_version 1.1;\n\
-        proxy_set_header Host $host;\n\
-        proxy_set_header X-Real-IP $remote_addr;\n\
-        # SSE 流式：关闭缓冲，超时拉长\n\
-        proxy_buffering off;\n\
-        proxy_read_timeout 300s;\n\
-        proxy_set_header Connection "";\n\
-    }\n\
-}' > /etc/nginx/conf.d/default.conf
+# nginx 配置：SPA history 模式 fallback + /api 反代到 backend
+# 直接写入最终配置，避免 sed 后处理
+COPY <<'EOF' /etc/nginx/conf.d/default.conf
+server {
+    listen       8080;
+    server_name  _;
+    root         /usr/share/nginx/html;
+    index        index.html;
 
-# 非 root：nginx 1.27 alpine 默认 worker 以 nginx 用户运行，但 80 端口需 root 绑定。
-# 改监听 8080 并以 nginx 用户运行，避免 root。
-RUN sed -i 's/listen 80;/listen 8080;/' /etc/nginx/conf.d/default.conf
-USER nginx
+    # SPA history 模式：所有非文件请求回退到 index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # /api 反代到后端容器
+    location /api/ {
+        proxy_pass http://backend:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        # SSE 流式：关闭缓冲，超时拉长
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_set_header Connection "";
+        # PDF/论文上传：放宽 nginx 默认 1m 限制，避免 413
+        client_max_body_size 50m;
+    }
+}
+EOF
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \

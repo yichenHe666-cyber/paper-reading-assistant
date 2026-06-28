@@ -6,21 +6,27 @@
 #
 # 一键启动：docker compose up -d
 # 首次需配置 .env（拷贝 .env.example 填写 LLM key 等）。
+# 必须在本目录（deploy/）下执行，compose 会自动加载本目录的 .env。
 services:
   backend:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backend
+      args:
+        VERSION: "${VERSION:-v2.0.0}"
     image: nuclear-ox-backend:v2
     container_name: nro-backend
     restart: unless-stopped
+    init: true
+    env_file:
+      - .env
     environment:
-      # 监听仅本机（compose 网络内可达）；需外网访问经 frontend nginx 反代
+      # 监听容器内全部接口（compose 网络内可达）；外网访问经 frontend nginx 反代
       SERVER_HOST: "0.0.0.0"
       SERVER_PORT: "8000"
       # 数据目录（与 core 共享卷）
       NRO_DATA_DIR: "/data"
-      # LLM 配置（从 .env 注入）
+      # LLM 配置（.env 已含；此处仅给容器场景默认值兜底，会被 env_file 覆盖）
       LLM_PROVIDER: "${LLM_PROVIDER:-ollama}"
       LLM_API_BASE: "${LLM_API_BASE:-http://host.docker.internal:11434/v1}"
       LLM_API_KEY: "${LLM_API_KEY:-}"
@@ -28,9 +34,10 @@ services:
       # Rust core 地址（compose 内网服务名）
       CORE_BASE_URL: "http://core:8788"
       CORE_TIMEOUT: "60"
-      # GitHub 同步
+      # company 源用 GitHub Token（追踪 9 家 AI 公司 org，非 Papers We Love）
       GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
-      DEFAULT_GITHUB_REPO: "${DEFAULT_GITHUB_REPO:-papers-we-love/papers-we-love}"
+      # 种子论文路径（与卷挂载 /data 对齐；用户可将 seed_papers.json 放入卷根目录）
+      SEED_PAPERS_PATH: "/data/seed_papers.json"
       TZ: "Asia/Shanghai"
     volumes:
       - nro-data:/data
@@ -38,9 +45,13 @@ services:
       - nro-net
     ports:
       # 仅本机暴露，外网访问走 frontend nginx 的 8080
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      # 让容器内能访问宿主的 Ollama（Linux 必需，macOS/Windows 自动有）
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - core
+      core:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/api/health"]
       interval: 30s
@@ -55,6 +66,9 @@ services:
     image: nuclear-ox-core:v2
     container_name: nro-core
     restart: unless-stopped
+    init: true
+    env_file:
+      - .env
     environment:
       NRO_DATA_DIR: "/data"
       CORE_HOST: "0.0.0.0"
@@ -65,9 +79,9 @@ services:
       EMBEDDING_API_BASE: "${EMBEDDING_API_BASE:-http://host.docker.internal:11434}"
       EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
       EMBEDDING_TIMEOUT_SECS: "30"
-      # 记忆参数（spec §5.3）
-      RECENCY_HALF_LIFE_DAYS: "30"
-      MAX_AGE_DAYS: "365"
+      # 记忆参数
+      RECENCY_HALF_LIFE_DAYS: "${RECENCY_HALF_LIFE_DAYS:-30}"
+      MAX_AGE_DAYS: "${MAX_AGE_DAYS:-365}"
       RUST_LOG: "info"
       TZ: "Asia/Shanghai"
     volumes:
@@ -94,13 +108,15 @@ services:
     image: nuclear-ox-frontend:v2
     container_name: nro-frontend
     restart: unless-stopped
+    init: true
     networks:
       - nro-net
     ports:
       # 唯一对外端口：本机 8080（生产可改 80 或加反代/TLS）
-      - "8080:8080"
+      - "${FRONTEND_PORT:-8080}:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   nro-data:

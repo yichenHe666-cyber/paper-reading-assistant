@@ -108,9 +108,14 @@ type CreateDecisionRequest struct {
 }
 
 // searchVectorRequest 向量检索请求体（Go 内部用，对应 Rust core SearchVectorRequest）。
+//
+// TopK 用 omitempty：当调用方传 0（表示"用 Rust 侧默认值"）时，该字段不写入 JSON，
+// Rust 侧 serde #[serde(default = "default_top_k")] 才能生效（serde default 仅在字段缺失时触发，
+// 字段存在但值为 0 时不会用 default）。修复审查发现的核心 Blocker：原实现始终发送 top_k:0，
+// 导致向量检索永远返回空。
 type searchVectorRequest struct {
 	Query string `json:"query"`
-	TopK  int    `json:"top_k"`
+	TopK  int    `json:"top_k,omitempty"`
 }
 
 // itemsWrapper 是 Rust core 列表响应的统一包装 {"items": [...]}。

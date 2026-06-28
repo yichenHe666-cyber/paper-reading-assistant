@@ -1,0 +1,28 @@
+# Docker 构建忽略列表。
+# 避免把本地 node_modules / target / dist / *.db 烤进镜像层，
+# 同时减小 build context 体积、加速构建、防止跨平台二进制错配。
+**/node_modules
+**/dist
+**/.pnpm-store
+**/target
+**/.git
+**/.gitignore
+
+# 本地 SQLite 数据库与 WAL/SHM 文件（绝不烤进镜像）
+**/data/*.db
+**/data/*.db-journal
+**/data/*.db-wal
+**/data/*.db-shm
+
+# 测试与临时文件
+**/*_test.go
+**/testdata/
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+
+# 文档与设计稿（镜像运行不需要）
+**/docs/
+**/specs/
+**/*.md

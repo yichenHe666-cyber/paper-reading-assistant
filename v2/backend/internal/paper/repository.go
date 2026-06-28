@@ -52,7 +52,7 @@ type Paper struct {
 	SubDomain         string `json:"sub_domain"`          // 子领域：ml/dl/llm/...
 	DifficultyScore   int    `json:"difficulty_score"`    // 难度评分 1-10
 	Tags              string `json:"tags"`                // 标签 JSON 数组字符串
-	AIClassified      int    `json:"ai_classified"`       // 是否已 AI 分类：0=人工预设/未分类，1=已分类
+	AIClassified      int    `json:"ai_classified"`       // 分类状态：0=未分类（待 AI 分类），1=已分类（AI 或人工预设）
 	Company           string `json:"company"`             // 公司名（company 源用）
 	GitHubRepo        string `json:"github_repo"`         // GitHub 仓库全名（company 源用）
 	ArxivID           string `json:"arxiv_id"`            // arXiv ID
@@ -294,22 +294,29 @@ func tagsToJSON(tags []string) string {
 
 // UpsertPaperMeta 将数据源返回的 PaperMeta 幂等写入 papers 表。
 // id 生成规则：有 arxiv_id 用 arxiv_{arxiv_id}，有 doi 用 doi_{doi}，否则 uuid_{uuid}。
-// 不覆盖 read_status/obsidian_path/last_read_at/total_read_seconds（用户阅读状态与笔记）。
-// 若论文已存在且 ai_classified=0（人工预设），不覆盖 tags；level/paper_type/sub_domain/difficulty_score
-// 由 AI 分类流程维护，本方法（数据源同步）不触碰它们。
+//
+// ai_classified 语义（修复审查发现的语义矛盾）：
+//   - 数据源同步写入的论文标记 ai_classified=0（未分类，待 AI 分类），
+//     这样 ClassifyBatch（查 ai_classified=0）才能将其纳入批量分类；
+//   - 冲突时不修改 ai_classified（保留已有状态：0 仍待分类，1 已分类不动）；
+//   - tags：仅当论文尚未分类（ai_classified=0）时用数据源 tags 覆盖；
+//     已分类（ai_classified=1）的论文保留 AI/人工 tags，不被数据源覆盖。
+//
+// 不覆盖 read_status/obsidian_path/last_read_at/total_read_seconds（用户阅读状态与笔记）；
+// level/paper_type/sub_domain/difficulty_score 由 AI 分类流程或种子导入维护，本方法不触碰。
 func (r *Repository) UpsertPaperMeta(meta PaperMeta) error {
 	id := paperMetaID(meta)
 	tagsJSON := tagsToJSON(meta.Tags)
 	_, err := r.db.Exec(
 		`INSERT INTO papers(id, title, authors, year, abstract, pdf_url, doi, arxiv_id,
 			source, venue, company, github_repo, tags, ai_classified)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 		 ON CONFLICT(id) DO UPDATE SET
 			title=excluded.title, authors=excluded.authors, year=excluded.year,
 			abstract=excluded.abstract, pdf_url=excluded.pdf_url, doi=excluded.doi,
 			arxiv_id=excluded.arxiv_id, source=excluded.source, venue=excluded.venue,
 			company=excluded.company, github_repo=excluded.github_repo,
-			tags=CASE WHEN papers.ai_classified=0 THEN papers.tags ELSE excluded.tags END`,
+			tags=CASE WHEN papers.ai_classified=1 THEN papers.tags ELSE excluded.tags END`,
 		id, meta.Title, meta.Authors, meta.Year, meta.Abstract, meta.PDFURL, meta.DOI,
 		meta.ArxivID, meta.Source, meta.Venue, meta.Company, meta.GitHubRepo, tagsJSON,
 	)

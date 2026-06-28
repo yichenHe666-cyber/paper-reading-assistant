@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -110,19 +111,36 @@ type oaResponse struct {
 }
 
 // Sync 按 venue 循环调用 OpenAlex /works 接口，聚合所有论文元数据。
-// 单个 venue 请求失败不阻断其余 venue，已成功拉取的部分仍会返回。
+//
+// 错误隔离策略（修复审查发现的问题）：
+//   - 单个 venue 请求失败不阻断其余 venue：仅记日志并 continue，已成功拉取的部分仍会返回；
+//   - 部分 venue 成功 → 返回 (partial, nil)，SyncAll 能 upsert 已成功部分的论文；
+//   - 全部 venue 失败 → 返回 (nil, err)，便于上层感知（如 429 限流、网络不通）整源不可用。
+//
 // 每篇 PaperMeta 的 Source 字段固定为 "openalex"。
 func (o *OpenAlexSource) Sync(ctx context.Context) ([]PaperMeta, error) {
 	var all []PaperMeta
+	var failedVenues []string
+	var firstErr error
 	for _, venue := range o.venues {
 		works, err := o.fetchWorks(ctx, venue)
 		if err != nil {
-			// 单 venue 失败不阻断其余 venue，但记录到返回错误中便于上层感知。
-			return all, fmt.Errorf("拉取 venue %s 失败: %w", venue, err)
+			log.Printf("[openalex] [WARN] 拉取 venue %s 失败（跳过，继续其余 venue）: %v", venue, err)
+			failedVenues = append(failedVenues, venue)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		for _, w := range works {
 			all = append(all, o.workToMeta(w))
 		}
+	}
+	// 全部 venue 失败时返回错误，便于上层感知整源不可用；
+	// 部分 venue 成功时返回已拉取数据 + nil，保证已成功部分能被 upsert（错误隔离）。
+	if len(failedVenues) > 0 && len(all) == 0 {
+		return all, fmt.Errorf("全部 %d 个 venue 拉取失败（%s）；首个错误: %w",
+			len(failedVenues), strings.Join(failedVenues, ","), firstErr)
 	}
 	return all, nil
 }

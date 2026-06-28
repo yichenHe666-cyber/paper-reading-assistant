@@ -9,21 +9,28 @@
 import type {
   ApiError,
   ClassifyResponse,
+  CreateDecisionRequest,
+  CreateMemoryRequest,
+  DecisionEntry,
+  DreamDiaryEntry,
+  DreamResult,
   EvolveResult,
   HealthInfo,
   ListPapersResponse,
+  Memory,
   Message,
   Paper,
   PaperDetail,
   PaperFilter,
   ReadStatus,
   Session,
+  SimilarMemory,
   Skill,
   SkillMode,
   Source,
   StreamEvent,
   SendMessageResponse,
-  SyncResult,
+  SyncSourcesResponse,
 } from './types'
 
 // API 基地址：优先用 VITE_API_BASE，缺省走相对路径（dev 由 vite proxy 转发）。
@@ -154,8 +161,9 @@ export function listSources(): Promise<Source[]> {
 }
 
 // syncSources 触发数据源同步。source 指定时单源同步，省略（空串）时全量同步。
-export function syncSources(source?: string): Promise<{ results: SyncResult[] }> {
-  return request<{ results: SyncResult[] }>('POST', '/api/sources/sync', { source: source ?? '' })
+// 返回各源明细 results 与汇总统计（total_sources/success_count/failed_count/total_papers）。
+export function syncSources(source?: string): Promise<SyncSourcesResponse> {
+  return request<SyncSourcesResponse>('POST', '/api/sources/sync', { source: source ?? '' })
 }
 
 // --- 会话 ---
@@ -328,4 +336,72 @@ export function evolveSkill(slug: string): Promise<SkillStats> {
 // --- 自进化 ---
 export function evolveSession(sessionId: string): Promise<EvolveResult> {
   return request<EvolveResult>('POST', '/api/chat/evolve', { session_id: sessionId })
+}
+
+// --- 记忆 / 梦境 / 决策（M4，代理 Rust core）---
+// 与后端 /api/memory/* 路由一一对应，类型镜像 memory 包。
+// 这些端点由 Go 后端代理转发到 Rust core；core 未启动时返回 502。
+
+// createMemory 创建记忆。Rust 侧异步生成 embedding，返回的 Memory 已含 id。
+export function createMemory(req: CreateMemoryRequest): Promise<Memory> {
+  return request<Memory>('POST', '/api/memory', req)
+}
+
+// getMemory 按 id 查询记忆。未找到时后端返回 404（抛 ApiCallError）。
+export function getMemory(id: string): Promise<Memory> {
+  return request<Memory>('GET', `/api/memory/${encodeURIComponent(id)}`)
+}
+
+// deleteMemory 删除记忆（含向量级联）。204 无响应体。
+export function deleteMemory(id: string): Promise<void> {
+  return request<void>('DELETE', `/api/memory/${encodeURIComponent(id)}`)
+}
+
+// searchMemory 关键字检索（content LIKE）。limit<=0 时后端用默认 20。
+export function searchMemory(keyword: string, limit?: number): Promise<Memory[]> {
+  const params = new URLSearchParams()
+  params.set('keyword', keyword)
+  if (limit && limit > 0) params.set('limit', String(limit))
+  return request<Memory[]>('GET', `/api/memory/search?${params.toString()}`)
+}
+
+// searchVector 向量相似度检索。topK<=0 时后端用默认 5。
+export function searchVector(query: string, topK?: number): Promise<SimilarMemory[]> {
+  return request<SimilarMemory[]>('POST', '/api/memory/search-vector', {
+    query,
+    top_k: topK && topK > 0 ? topK : 0,
+  })
+}
+
+// triggerDream 触发一次完整梦境（Light → REM → Deep）。
+export function triggerDream(): Promise<DreamResult> {
+  return request<DreamResult>('POST', '/api/memory/dream')
+}
+
+// listDreamDiary 列出最近的 Dream Diary。limit<=0 时后端用默认 20。
+export function listDreamDiary(limit?: number): Promise<DreamDiaryEntry[]> {
+  const params = new URLSearchParams()
+  if (limit && limit > 0) params.set('limit', String(limit))
+  const qs = params.toString()
+  const path = qs ? `/api/memory/dream-diary?${qs}` : '/api/memory/dream-diary'
+  return request<DreamDiaryEntry[]>('GET', path)
+}
+
+// getDreamDiary 按 id 查询单条 Dream Diary。
+export function getDreamDiary(id: string): Promise<DreamDiaryEntry> {
+  return request<DreamDiaryEntry>('GET', `/api/memory/dream-diary/${encodeURIComponent(id)}`)
+}
+
+// addDecision 记录一条决策到账本。
+export function addDecision(req: CreateDecisionRequest): Promise<DecisionEntry> {
+  return request<DecisionEntry>('POST', '/api/memory/decision', req)
+}
+
+// listDecisions 列出最近的决策。limit<=0 时后端用默认 20。
+export function listDecisions(limit?: number): Promise<DecisionEntry[]> {
+  const params = new URLSearchParams()
+  if (limit && limit > 0) params.set('limit', String(limit))
+  const qs = params.toString()
+  const path = qs ? `/api/memory/decisions?${qs}` : '/api/memory/decisions'
+  return request<DecisionEntry[]>('GET', path)
 }

@@ -70,7 +70,7 @@ impl Config {
             embedding_api_base: env::var("EMBEDDING_API_BASE")
                 .unwrap_or_else(|_| "http://localhost:11434".into()),
             embedding_api_key: env::var("EMBEDDING_API_KEY").unwrap_or_default(),
-            embedding_timeout_secs: env::var("EMBEDDING_TIMEOUT")
+            embedding_timeout_secs: env::var("EMBEDDING_TIMEOUT_SECS")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(30),

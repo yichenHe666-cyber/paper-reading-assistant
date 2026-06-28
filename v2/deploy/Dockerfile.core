@@ -21,9 +21,9 @@ RUN touch src/main.rs src/lib.rs && \
 # --- runtime ---
 FROM debian:bookworm-slim AS runtime
 
-# 安装 CA 证书（调 embedding 服务 HTTPS）与 libssl（reqwest rustls 实际不依赖 openssl，但兜底）
+# 安装 CA 证书（调 embedding 服务 HTTPS）、wget（healthcheck）、libssl3（兜底）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 && \
+    ca-certificates libssl3 wget && \
     rm -rf /var/lib/apt/lists/* && \
     addgroup --system app && adduser --system --ingroup app app
 
@@ -34,8 +34,9 @@ COPY --from=builder /src/target/release/nuclear-ox-core /app/nuclear-ox-core
 RUN mkdir -p /data && chown -R app:app /data /app
 USER app
 
+# CORE_HOST 默认 0.0.0.0：容器场景必须监听非回环地址，否则其他容器无法访问
 ENV NRO_DATA_DIR=/data \
-    CORE_HOST=127.0.0.1 \
+    CORE_HOST=0.0.0.0 \
     CORE_PORT=8788 \
     RUST_LOG=info
 

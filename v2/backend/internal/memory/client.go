@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -28,10 +29,11 @@ type Client struct {
 	http    *http.Client
 }
 
-// New 构造 Client。baseURL 不带尾部 /，timeoutSec 控制单次请求超时。
+// New 构造 Client。baseURL 不带尾部 /（传入带 / 的值会被剥离，避免拼接出 //memory 双斜杠），
+// timeoutSec 控制单次请求超时。
 func New(baseURL string, timeoutSec float64) *Client {
 	return &Client{
-		baseURL: baseURL,
+		baseURL: strings.TrimRight(baseURL, "/"),
 		http: &http.Client{
 			Timeout: time.Duration(timeoutSec * float64(time.Second)),
 		},

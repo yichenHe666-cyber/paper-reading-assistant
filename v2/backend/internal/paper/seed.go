@@ -6,7 +6,7 @@
 //
 // 设计要点：
 //   - 种子论文使用稳定 id（arxiv_id > doi > seed_{slug}），保证重复导入幂等；
-//   - 导入时 ai_classified=0（标记为人工预设），AI 分类流程据此不覆盖其 tags；
+//   - 导入时 ai_classified=1（标记为人工预设=已分类），AI 分类流程据此跳过、不覆盖 tags；
 //   - 重复导入不覆盖用户的 read_status/obsidian_path/阅读时长；
 //   - level/paper_type/sub_domain/difficulty_score 由种子清单直接指定，不依赖 AI。
 package paper
@@ -83,10 +83,11 @@ func seedPaperID(seed SeedPaper) string {
 // 行为保证：
 //   - 幂等：基于稳定 id 用 INSERT ... ON CONFLICT，重复导入不产生重复行；
 //   - 不覆盖阅读进度：冲突时保留 read_status/obsidian_path/last_read_at/total_read_seconds；
-//   - 人工预设标记：ai_classified=0，AI 分类流程据此不覆盖 tags。
+//   - 人工预设标记：ai_classified=1（已分类），AI 分类流程据此跳过、不覆盖 tags。
 //
 // 实现说明：未直接调用 UpsertPaperMeta，因其对无 arxiv_id/doi 的论文回退到随机 uuid，
-// 会破坏种子清单的幂等导入。此处用一条 upsert 同时写入基本元数据与分类字段，
+// 会破坏种子清单的幂等导入；且 UpsertPaperMeta 不写 level/paper_type 等分类字段。
+// 此处用一条 upsert 同时写入基本元数据与分类字段，
 // 功能上是"UpsertPaperMeta 写基本元数据 + UPDATE 设分类字段"的等价合并。
 func ImportSeedPapers(repo *Repository, papers []SeedPaper) (imported, skipped, failed int, err error) {
 	for _, seed := range papers {
@@ -102,14 +103,14 @@ func ImportSeedPapers(repo *Repository, papers []SeedPaper) (imported, skipped, 
 			`INSERT INTO papers(id, title, authors, year, abstract, pdf_url, doi, arxiv_id,
 			    source, venue, company, github_repo, tags, level, paper_type, sub_domain,
 			    difficulty_score, ai_classified, read_status)
-			 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unread')
+			 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'unread')
 			 ON CONFLICT(id) DO UPDATE SET
 			    title=excluded.title, authors=excluded.authors, year=excluded.year,
 			    abstract=excluded.abstract, pdf_url=excluded.pdf_url, doi=excluded.doi,
 			    arxiv_id=excluded.arxiv_id, source=excluded.source, venue=excluded.venue,
 			    company=excluded.company, github_repo=excluded.github_repo, tags=excluded.tags,
 			    level=excluded.level, paper_type=excluded.paper_type, sub_domain=excluded.sub_domain,
-			    difficulty_score=excluded.difficulty_score, ai_classified=0`,
+			    difficulty_score=excluded.difficulty_score, ai_classified=1`,
 			id, meta.Title, meta.Authors, meta.Year, meta.Abstract, meta.PDFURL, meta.DOI,
 			meta.ArxivID, meta.Source, meta.Venue, meta.Company, meta.GitHubRepo, tagsJSON,
 			seed.Level, seed.PaperType, seed.SubDomain, seed.DifficultyScore,

@@ -97,7 +97,9 @@ async fn get_memory(State(st): State<AppState>, Path(id): Path<String>) -> Respo
 
 async fn delete_memory(State(st): State<AppState>, Path(id): Path<String>) -> Response {
     match st.memory.delete(&id) {
-        Ok(_) => (StatusCode::NO_CONTENT, Json(json!({"ok": true}))).into_response(),
+        // 204 No Content 不应携带 body：原实现返回 Json({"ok":true}) 虽被 axum 忽略，
+        // 但语义错误且部分严格客户端会因 204 + body 报警。改为纯 204 空响应。
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => internal_error(e.to_string()),
     }
 }

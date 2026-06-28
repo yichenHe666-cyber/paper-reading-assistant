@@ -11,10 +11,14 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -84,6 +88,10 @@ func (s *Server) listPapers(c *gin.Context) {
 	if filter.PageSize < 1 {
 		filter.PageSize = 20
 	}
+	// page_size 上限 100，防止恶意请求一次拉取全表导致内存/延迟尖峰
+	if filter.PageSize > 100 {
+		filter.PageSize = 100
+	}
 
 	papers, total, err := s.repo.ListPapers(filter)
 	if err != nil {
@@ -113,7 +121,21 @@ func (s *Server) getPaper(c *gin.Context) {
 	c.JSON(http.StatusOK, detail)
 }
 
+// pdfProxyClient 是 PDF 代理专用 HTTP 客户端。
+// 超时 30s 避免恶意慢速上游拖垮后端；代理仅拉取 PDF，30s 足够。
+var pdfProxyClient = &http.Client{Timeout: 30 * time.Second}
+
+// maxPDFSize 限制单次代理的 PDF 体积（50MB），防止恶意上游用大响应撑爆内存。
+const maxPDFSize = 50 * 1024 * 1024
+
 // proxyPaperPDF 代理拉取论文 PDF 流。pdf_url 为空或论文不存在时返回 404。
+//
+// SSRF 防护（修复审查发现的高危项）：
+//   - 仅允许 http/https scheme，禁止 file:///、gopher:// 等；
+//   - 解析主机名并拒绝内网/回环/链路本地地址，防止容器内代理访问内网元数据服务
+//     （如 169.254.169.254 云厂商元数据、127.0.0.1 本机服务、10/172.16/192.168 私网）；
+//   - 限制响应体积 50MB，避免恶意上游用大响应耗尽内存；
+//   - 超时 30s，避免慢速上游拖垮 gin worker。
 func (s *Server) proxyPaperPDF(c *gin.Context) {
 	id := c.Param("id")
 	p, err := s.repo.GetPaper(id)
@@ -126,20 +148,60 @@ func (s *Server) proxyPaperPDF(c *gin.Context) {
 		return
 	}
 
-	resp, err := http.Get(p.PDFURL)
+	if err := validatePDFURL(p.PDFURL); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PDF 地址非法: " + err.Error()})
+		return
+	}
+
+	resp, err := pdfProxyClient.Get(p.PDFURL)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "获取 PDF 失败: " + err.Error()})
 		return
 	}
 	defer resp.Body.Close()
 
+	// 仅代理 2xx 响应；上游 4xx/5xx 透传状态码但不流式转发可能的 HTML 错误页
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("PDF 源返回非 200: status=%d", resp.StatusCode)})
+		return
+	}
+
 	c.Header("Content-Type", "application/pdf")
 	c.Status(resp.StatusCode)
-	// 流式转发响应体
-	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+	// 限制读取体积，超限即停止（已写入部分仍返回，浏览器会因 PDF 截断报错，但服务器不会被撑爆）
+	limited := io.LimitReader(resp.Body, maxPDFSize+1)
+	if _, err := io.Copy(c.Writer, limited); err != nil {
 		// 客户端可能已断开，仅记日志由 Recovery 兜底
 		_ = err
 	}
+}
+
+// validatePDFURL 校验 PDF URL 安全性：scheme 限定 http/https，主机名禁止指向内网/回环/链路本地。
+// 解析主机名后做 DNS 查询，对所有解析到的 IP 逐一校验，防止 DNS rebinding 到内网地址。
+func validatePDFURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("URL 解析失败: %w", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("仅允许 http/https，实际 scheme=%s", scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("URL 缺少主机名")
+	}
+	// 解析主机名到 IP（可能是域名或字面量 IP）
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("解析主机 %s 失败: %w", host, err)
+	}
+	for _, ip := range ips {
+		if !ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			return fmt.Errorf("主机 %s 解析到内网/回环地址 %s，禁止代理", host, ip)
+		}
+	}
+	return nil
 }
 
 // getRelatedPapers 返回与指定论文 sub_domain 相同的前 10 篇论文（排除自身）。

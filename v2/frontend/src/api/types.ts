@@ -44,7 +44,7 @@ export interface Paper {
   sub_domain: string // 子领域：ml/dl/llm/safety/rl/reasoning/infra/dist_sys/...
   difficulty_score: number // 难度评分 1-10
   tags: string // 标签 JSON 数组字符串，如 '["transformer","attention"]'
-  ai_classified: number // 是否已 AI 分类：0=人工预设/未分类，1=已分类
+  ai_classified: number // 分类状态：0=未分类（待 AI 分类），1=已分类（AI 或人工预设种子）
   company: string // 公司名（company 源用）
   github_repo: string // GitHub 仓库全名（company 源用）
   arxiv_id: string // arXiv ID
@@ -103,6 +103,16 @@ export interface SyncResult {
   count: number
   error: string
   duration: number // 同步耗时（纳秒，time.Duration 序列化值）
+}
+
+// SyncSourcesResponse 是 POST /api/sources/sync 的响应体。
+// 除各源明细 results 外，附带汇总统计，与后端 server.syncSourcesResponse 对齐。
+export interface SyncSourcesResponse {
+  results: SyncResult[]
+  total_sources: number // 参与同步的源总数
+  success_count: number // 成功源数
+  failed_count: number // 失败源数
+  total_papers: number // 新增论文数（成功源的 count 之和）
 }
 
 // ClassifyResponse 是 POST /api/papers/classify 的响应体。
@@ -220,4 +230,90 @@ export interface StreamEvent {
 
 export interface ApiError {
   error: string
+}
+
+// --- 记忆 / 梦境 / 决策（M4，代理 Rust core）---
+// 与后端 memory 包的 Go 类型镜像，字段名按 snake_case 对齐 Rust serde 序列化。
+
+// 记忆层级常量（与 Rust core MemoryLayer::as_str 对齐）。
+export type MemoryLayer = 'episodic' | 'long_term' | 'index'
+
+export interface Memory {
+  id: string
+  layer: MemoryLayer
+  content: string
+  importance_score: number
+  decay_state: string // active / decaying / promoted
+  embedding_id: string
+  created_at: string
+}
+
+export interface CreateMemoryRequest {
+  layer: MemoryLayer
+  content: string
+  importance_score?: number // 缺省由 Rust 侧补 0.5
+}
+
+// 向量相似度检索结果。
+export interface SimilarMemory {
+  memory: Memory
+  similarity: number
+}
+
+// 六信号评分明细（spec §5.2），用于 Dream Diary 详情。
+export interface ScoreBreakdown {
+  memory_id: string
+  relevance: number
+  frequency: number
+  diversity: number
+  recency: number
+  integration: number
+  richness: number
+  reinforcement: number
+  total: number
+  promoted: boolean
+  reason: string
+}
+
+// 一次梦境整合的结果。
+export interface DreamResult {
+  diary_id: string
+  started_at: string
+  finished_at: string
+  reviewed_count: number
+  promoted_count: number
+  decayed_count: number
+  summary: string
+  breakdowns: ScoreBreakdown[]
+}
+
+// Dream Diary 单条记录。
+export interface DreamDiaryEntry {
+  id: string
+  run_id: string
+  started_at: string
+  finished_at: string
+  stage: string // light / rem / deep / done
+  reviewed_count: number
+  promoted_count: number
+  decayed_count: number
+  summary: string
+  details_json: string
+}
+
+// 决策账本条目（spec §5.5）。
+export interface DecisionEntry {
+  id: string
+  context: string
+  decision: string
+  rationale: string
+  outcome: string
+  created_at: string
+}
+
+export interface CreateDecisionRequest {
+  context: string
+  decision: string
+  rationale?: string
+  outcome?: string
 }

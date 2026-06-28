@@ -3,7 +3,7 @@
 #
 # 多阶段构建：builder 编译单二进制，runtime 仅含二进制与 CA 证书，体积小。
 # 安全：以非 root 用户运行；不内嵌源码；数据目录通过卷挂载。
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # 构建参数：版本号写入二进制（便于 health 端点回显）
 ARG VERSION=v2.0.0
@@ -24,8 +24,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # --- runtime ---
 FROM alpine:3.20 AS runtime
 
-# 安装 CA 证书（HTTPS 调 GitHub/Ollama 需要）与 tzdata（时区）
-RUN apk add --no-cache ca-certificates tzdata && \
+# 安装 CA 证书（HTTPS 调 arXiv/OpenAlex/Ollama 需要）、tzdata（时区）、wget（healthcheck）
+RUN apk add --no-cache ca-certificates tzdata wget && \
     addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
